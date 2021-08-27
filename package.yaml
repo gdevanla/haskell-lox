@@ -1,0 +1,75 @@
+name:                haskell-lox
+version:             0.1.0.0
+github:              githubuser/haskell-lox
+license:             BSD3
+author:              Author name here
+maintainer:          example@example.com
+copyright:           2021 Author name here
+
+extra-source-files:
+- README.md
+- ChangeLog.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on Github at <https://github.com/githubuser/haskell-lox#readme>
+
+dependencies:
+- base >= 4.11 && < 10
+- rio >= 0.1.12.0
+- array >= 0.5.4.0
+- text >= 1.2.4.1
+- directory >= 1.3.6.0
+- filepath >= 1.4.2.1
+- regex-tdfa >= 1.3.1
+- utf8-string >= 1
+- bytestring >= 0.10.12.0
+- optparse-simple >= 0.1.1.3
+
+
+ghc-options:
+- -Wall
+- -Wcompat
+- -Widentities
+- -Wincomplete-record-updates
+- -Wincomplete-uni-patterns
+- -Wpartial-fields
+- -Wredundant-constraints
+
+library:
+  source-dirs: src
+
+executables:
+  haskell-lox-exe:
+    main:                Main.hs
+    source-dirs:         app
+    dependencies:
+    - haskell-lox
+    - optparse-simple
+
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+
+tests:
+  haskell-lox-test-1:
+    main:                test_lexer.hs
+    source-dirs:         test
+    dependencies:
+    - haskell-lox
+    - tasty
+    - HUnit
+    - tasty-hunit
+    - hspec
+    - tasty
+
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
