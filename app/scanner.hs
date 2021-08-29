@@ -1,6 +1,6 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE TemplateHaskell #-}
-import Import hiding (many, (<|>))
+import Import hiding (many, (<|>), try)
 import System.Environment
 import System.IO (print)
 import Run
@@ -98,5 +98,53 @@ char_mapping =
  (PLUS, '+'),
  (SEMICOLON, '-'),
  (SLASH, '/'),
- (STAR, '*')
+ (STAR, '*'),
+ (BANG, '!'),
+ (EQUAL, '='),
+ (GREATER, '>'),
+ (LESS, '<')
  ]
+
+scanDoubleToken :: Parser LoxTok
+scanDoubleToken = choice $ build <$> double_char_mapping
+  where
+    build :: (LoxTok, String) -> Parser LoxTok
+    build (x, y) = x <$ string y
+
+double_char_mapping :: [(LoxTok, String)]
+double_char_mapping =
+  [(BANG_EQUAL, "!="),
+  (EQUAL_EQUAL, "=="),
+  (GREATER_EQUAL, ">="),
+  (LESS_EQUAL, "<=")
+  ]
+
+keyword_mapping :: [(LoxTok, String)]
+keyword_mapping =
+  [
+    (AND, "and"),
+    (CLASS, "class"),
+    (ELSE, "else"),
+    (FALSE, "false"),
+    (FUN, "fun"),
+    (FOR, "for"),
+    (IF, "if"),
+    (NIL, "nil"),
+    (OR, "or"),
+    (PRINT, "print"),
+    (RETURN, "return"),
+    (SUPER, "super"),
+    (THIS, "this"),
+    (TRUE, "true"),
+    (VAR, "var"),
+    (WHILE, "while")
+    ]
+
+scanKeywordToken :: Parser LoxTok
+scanKeywordToken = choice $ build <$> keyword_mapping
+  where
+    build :: (LoxTok, String) -> Parser LoxTok
+    build (x, y) = x <$ string y
+
+scanToken :: Parser LoxTok
+scanToken = try scanDoubleToken <|> try scanSingleCharToken <|> scanKeywordToken
