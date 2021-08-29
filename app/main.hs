@@ -1,7 +1,5 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE TemplateHaskell #-}
-module Main (main) where
-
 import Import
 import Run
 import RIO.Process
