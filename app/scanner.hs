@@ -41,7 +41,7 @@ data LoxTok =
   LESS| LESS_EQUAL|
 
   -- Literals.
-  IDENTIFIER| STRING String| NUMBER Double|
+  IDENTIFIER String| STRING String| NUMBER Double|
 
   -- Keywords.
   AND| CLASS| ELSE| FALSE| FUN| FOR| IF| NIL| OR|
@@ -71,18 +71,11 @@ lexeme_scan p = p <* whitespace
 
 -- token :: Char -> LoxScanner LoxTok
 
-lessThan :: Parser LoxTok
-lessThan = (return LEFT_PAREN) <* (PC.char '<')
-
-greaterThan :: Parser LoxTok
-greaterThan = (return LEFT_PAREN) <* (PC.char '>')
-
-
 scanSingleCharToken :: Parser LoxTok
 scanSingleCharToken = choice $ build <$> char_mapping
   where
     build :: (LoxTok, Char) -> Parser LoxTok
-    build (x, y) = x <$ char y
+    build (x, y) = x <$ char y <* whitespace
 
 
 char_mapping :: [(LoxTok, Char)]
@@ -109,7 +102,7 @@ scanDoubleToken :: Parser LoxTok
 scanDoubleToken = choice $ build <$> double_char_mapping
   where
     build :: (LoxTok, String) -> Parser LoxTok
-    build (x, y) = x <$ string y
+    build (x, y) = x <$ string y <* whitespace
 
 double_char_mapping :: [(LoxTok, String)]
 double_char_mapping =
@@ -144,7 +137,7 @@ scanKeywordToken :: Parser LoxTok
 scanKeywordToken = choice $ build <$> keyword_mapping
   where
     build :: (LoxTok, String) -> Parser LoxTok
-    build (x, y) = x <$ string y
+    build (x, y) = x <$ string y <* whitespace
 
 -- https://stackoverflow.com/questions/24106314/parser-for-quoted-string-using-parsec
 escape :: Parser String
@@ -163,13 +156,13 @@ scanQuotedString :: Parser LoxTok
 scanQuotedString = do
   char '"'
   strings <- many character
-  char '"'
+  char '"' <* whitespace
   return $ STRING $ Import.concat strings
 
 scanDouble :: Parser LoxTok
 scanDouble = do
   firstPart <- Text.Parsec.many1 digit
-  try (secondCharacter firstPart) <|> return (NUMBER $ read firstPart)
+  try (secondCharacter firstPart) <|> return (NUMBER $ read firstPart) <* whitespace
   where
     secondCharacter :: String -> Parser LoxTok
     secondCharacter firstPart = do
@@ -177,11 +170,34 @@ scanDouble = do
       secondPart <- Text.Parsec.many1 digit
       return $ NUMBER $ read $ Import.concat [firstPart, ".", secondPart]
 
+-- http://jakewheat.github.io/intro_to_parsing/#_var
+var :: Parser String
+var = do
+  fc <- firstChar
+  rest <- many nonFirstChar
+  return $ (fc : rest)
+  where
+    firstChar = satisfy (\a -> isLetter a || a == '_')
+    nonFirstChar = satisfy (\a -> isDigit a || isLetter a || a == '_')
+
+checkIfIdentifier :: Parser LoxTok
+checkIfIdentifier = do
+  s <- var
+  result ([(x, y) | (x, y) <- keyword_mapping, y == s]) s
+  where
+    result xs s = do
+      case xs of
+        [] -> return $ IDENTIFIER s
+        (x, _):_ -> return x
 
 scanToken :: Parser LoxTok
 scanToken =
   try scanDoubleToken <|>
   try scanSingleCharToken <|>
-  try scanKeywordToken <|>
   try scanQuotedString <|>
-  try scanDouble
+  try scanDouble <|>
+  checkIfIdentifier
+
+
+scanner :: String -> Either ParseError [LoxTok]
+scanner =  parse (many scanToken <* eof) ""
