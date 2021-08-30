@@ -146,7 +146,7 @@ scanKeywordToken = choice $ build <$> keyword_mapping
     build :: (LoxTok, String) -> Parser LoxTok
     build (x, y) = x <$ string y
 
--- https :// stackoverflow . com / questions / 24106314 / parser - for - quoted - string - using - parsec
+-- https://stackoverflow.com/questions/24106314/parser-for-quoted-string-using-parsec
 escape :: Parser String
 escape = do
   d <- char '\\'
