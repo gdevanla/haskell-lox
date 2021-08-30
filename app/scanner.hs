@@ -41,7 +41,7 @@ data LoxTok =
   LESS| LESS_EQUAL|
 
   -- Literals.
-  IDENTIFIER| STRING String| NUMBER String|
+  IDENTIFIER| STRING String| NUMBER Double|
 
   -- Keywords.
   AND| CLASS| ELSE| FALSE| FUN| FOR| IF| NIL| OR|
@@ -169,13 +169,13 @@ scanQuotedString = do
 scanDouble :: Parser LoxTok
 scanDouble = do
   firstPart <- Text.Parsec.many1 digit
-  try (secondCharacter firstPart) <|> return (NUMBER firstPart)
+  try (secondCharacter firstPart) <|> return (NUMBER $ read firstPart)
   where
     secondCharacter :: String -> Parser LoxTok
     secondCharacter firstPart = do
       void $ char '.'
       secondPart <- Text.Parsec.many1 digit
-      return $ NUMBER $ Import.concat [firstPart, ".", secondPart]
+      return $ NUMBER $ read $ Import.concat [firstPart, ".", secondPart]
 
 
 scanToken :: Parser LoxTok
