@@ -14,7 +14,7 @@ import FunctionsAndTypesForParsing (parseWithEof, parseWithLeftOver, regularPars
 import Text.Parsec.String as PS
 import Text.Parsec.Char as PC
 -- import Text.Parsec.String.Char
-import Text.Parsec.String.Char (anyChar)
+-- import Text.Parsec.String.Char (anyCh
 import Text.Parsec.String.Combinator (many1)
 
 import Text.Parsec
@@ -41,7 +41,7 @@ data LoxTok =
   LESS| LESS_EQUAL|
 
   -- Literals.
-  IDENTIFIER| STRING| NUMBER|
+  IDENTIFIER| STRING String| NUMBER String|
 
   -- Keywords.
   AND| CLASS| ELSE| FALSE| FUN| FOR| IF| NIL| OR|
@@ -146,5 +146,42 @@ scanKeywordToken = choice $ build <$> keyword_mapping
     build :: (LoxTok, String) -> Parser LoxTok
     build (x, y) = x <$ string y
 
+-- https :// stackoverflow . com / questions / 24106314 / parser - for - quoted - string - using - parsec
+escape :: Parser String
+escape = do
+  d <- char '\\'
+  c <- oneOf "\\\"0nrvtbf" -- all the characters which can be escaped
+  return [d, c]
+
+nonEscape :: Parser Char
+nonEscape = noneOf "\\\"\0\n\r\v\t\b\f"
+
+character :: Parser String
+character = fmap return nonEscape <|> escape
+
+scanQuotedString :: Parser LoxTok
+scanQuotedString = do
+  char '"'
+  strings <- many character
+  char '"'
+  return $ STRING $ Import.concat strings
+
+scanDouble :: Parser LoxTok
+scanDouble = do
+  firstPart <- Text.Parsec.many1 digit
+  try (secondCharacter firstPart) <|> return (NUMBER firstPart)
+  where
+    secondCharacter :: String -> Parser LoxTok
+    secondCharacter firstPart = do
+      void $ char '.'
+      secondPart <- Text.Parsec.many1 digit
+      return $ NUMBER $ Import.concat [firstPart, ".", secondPart]
+
+
 scanToken :: Parser LoxTok
-scanToken = try scanDoubleToken <|> try scanSingleCharToken <|> scanKeywordToken
+scanToken =
+  try scanDoubleToken <|>
+  try scanSingleCharToken <|>
+  try scanKeywordToken <|>
+  try scanQuotedString <|>
+  try scanDouble
