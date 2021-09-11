@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings#-}
 import RIO
 import System.IO
 import qualified RIO.Text as T
@@ -58,6 +59,9 @@ testScanInvalidDouble = testInvalidToken "testScanInvalidDouble" ".1121"
 testScanInvalidIdentifier_1 = testInvalidToken "testScanInvalidIdentifier_1" "1and"
 testScanInvalidIdentifier_2 = testInvalidToken "testScanInvalidIdentifier_2" "1_and"
 
+testComment_1 = testToken "testComment" "// this is a comment" (COMMENT " this is a comment")
+testComment_2 = testToken "testComment" "// this is a comment\n" (COMMENT " this is a comment")
+
 main = do
   defaultMain $ testGroup "tokenizer_tests_example_1" [
     testSingleCharToken,
@@ -73,6 +77,8 @@ main = do
     testSingleCharInvalidToken,
     testDoubleCharInvalidToken,
     testScanInvalidIdentifier_1,
-    testScanInvalidIdentifier_2
+    testScanInvalidIdentifier_2,
+    testComment_1,
+    testComment_2
     ]
   --defaultMain tests

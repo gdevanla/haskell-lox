@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings#-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE TemplateHaskell #-}
 
@@ -33,7 +33,7 @@ data LoxTok =
   AND| CLASS| ELSE| FALSE| FUN| FOR| IF| NIL| OR|
   PRINT| RETURN| SUPER| THIS| TRUE| VAR| WHILE|
 
-  WHITESPACE |
+  WHITESPACE | COMMENT Text|
 
   EOF
   deriving (Show, Eq)
@@ -63,6 +63,13 @@ whitespaceToken = do
   source_pos <- getPosition
   _ <- many1 $ oneOf " "
   return $ LoxTokInfo WHITESPACE Nothing Nothing source_pos
+
+scanComment :: Parser LoxTokInfo
+scanComment = do
+  source_pos <- getPosition
+  _ <- string "//"
+  comment <- try (manyTill anyToken (try (oneOf "\n"))) <|> manyTill anyToken eof
+  return $ LoxTokInfo (COMMENT (T.pack comment)) Nothing Nothing source_pos
 
 charMapping :: [(LoxTok, Char)]
 charMapping =
@@ -197,11 +204,13 @@ checkIfIdentifier = do
 
 scanToken :: Parser LoxTokInfo
 scanToken =
+  try scanComment <|>
   try scanDoubleToken <|>
   try scanSingleCharToken <|>
   try scanQuotedString <|>
   try scanDouble <|>
   checkIfIdentifier
+
 
 scanner :: String -> Either ParseError [LoxTokInfo]
 scanner =  parse (many scanToken <* eof) ""
