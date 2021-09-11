@@ -33,6 +33,8 @@ data LoxTok =
   AND| CLASS| ELSE| FALSE| FUN| FOR| IF| NIL| OR|
   PRINT| RETURN| SUPER| THIS| TRUE| VAR| WHILE|
 
+  WHITESPACE |
+
   EOF
   deriving (Show, Eq)
 
@@ -51,6 +53,17 @@ type LoxScanner = Parser
 whitespace :: Parser ()
 whitespace = void $ many $ oneOf " \n\t"
 
+-- whitespaceToken1 :: Parser LoxTokInfo
+-- whitespaceToken1 = do
+--   source_pos <- getPosition
+--   return $ LoxTokInfo WHITESPACE Nothing Nothing source_pos
+
+whitespaceToken :: Parser LoxTokInfo
+whitespaceToken = do
+  source_pos <- getPosition
+  _ <- many1 $ oneOf " "
+  return $ LoxTokInfo WHITESPACE Nothing Nothing source_pos
+
 charMapping :: [(LoxTok, Char)]
 charMapping =
   [ (LEFT_PAREN, '('),
@@ -61,7 +74,7 @@ charMapping =
     (DOT, '.'),
     (MINUS, '-'),
     (PLUS, '+'),
-    (SEMICOLON, '-'),
+    (SEMICOLON, ';'),
     (SLASH, '/'),
     (STAR, '*'),
     (BANG, '!'),
@@ -129,15 +142,16 @@ scanKeywordToken = do
 scanDouble :: Parser LoxTokInfo
 scanDouble = do
   source_pos <- getPosition
-  sel <- do
+  sel <- (do
     firstPart <- Text.Parsec.many1 digit
-    try (secondCharacter firstPart) <|> NUMBER (read firstPart) <$ whitespace
+    try (secondCharacter firstPart) <|> return (NUMBER (read firstPart)))
+  _ <- lookAhead (scanSingleCharToken <|> whitespaceToken)
   return $ LoxTokInfo sel Nothing Nothing source_pos
   where
     secondCharacter :: String -> Parser LoxTok
     secondCharacter firstPart = do
       void $ char '.'
-      secondPart <- Text.Parsec.many1 digit
+      secondPart <- Text.Parsec.many1 digit <* whitespace
       return $ NUMBER $ read $ Import.concat [firstPart, ".", secondPart]
 
 -- -- https://stackoverflow.com/questions/24106314/parser-for-quoted-string-using-parsec

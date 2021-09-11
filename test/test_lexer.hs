@@ -35,13 +35,13 @@ testDoubleCharToken = testToken "testDoubleCharToken"  "==" EQUAL_EQUAL
 
 testKeywordToken = testToken "testKeywordToken" "class" CLASS
 
-testScanDouble_1 = testToken "testScanDouble_1" "1121.1121" (NUMBER 1121.1121)
-testScanDouble_2 = testToken "testScanDouble_2" "0.1121" (NUMBER 0.1121)
+testScanDouble_1 = testToken "testScanDouble_1" "1121.1121;" (NUMBER 1121.1121)
+testScanDouble_2 = testToken "testScanDouble_2" "0.1121;" (NUMBER 0.1121)
 
 -- We don't like the Lexer doing this, but we will try handling these scenarios in the parser
-testScanDouble_3_bad = testToken "testScanDouble_3" ".1121" (DOT)
-testScanDouble_4_bad = testToken "testScanDouble_4" "1121.0" (NUMBER 1121.0)
-testScanInvalidIdentifier_bad = testToken "testScanIdentifier" "1and" (NUMBER 1.0)
+
+testScanDouble_4 = testToken "testScanDouble_4" "1121." (NUMBER 1121.0)
+
 
 testScanDoubleInvalid_2 = testInvalidToken "testScanDouble_2" "1121."
 
@@ -53,8 +53,10 @@ testSingleCharInvalidToken = testInvalidToken "testSingleCharInvalidToken" "%"
 
 testDoubleCharInvalidToken = testInvalidToken "testDoubleCharInvalidToken" "%%"
 
+testScanInvalidDouble = testInvalidToken "testScanInvalidDouble" ".1121"
 
-
+testScanInvalidIdentifier_1 = testInvalidToken "testScanInvalidIdentifier_1" "1and"
+testScanInvalidIdentifier_2 = testInvalidToken "testScanInvalidIdentifier_2" "1_and"
 
 main = do
   defaultMain $ testGroup "tokenizer_tests_example_1" [
@@ -63,12 +65,14 @@ main = do
     testKeywordToken,
     testScanDouble_1,
     testScanDouble_2,
-    testScanDouble_3_bad,
-    testScanDouble_4_bad,
+
+    testScanDouble_4,
     testScanIdentifier,
     -- invalid tokens
+    testScanInvalidDouble,
     testSingleCharInvalidToken,
     testDoubleCharInvalidToken,
-    testScanInvalidIdentifier_bad
+    testScanInvalidIdentifier_1,
+    testScanInvalidIdentifier_2
     ]
   --defaultMain tests
