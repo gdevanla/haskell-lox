@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings#-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE TemplateHaskell #-}
 import Import hiding (many, (<|>), try)
@@ -28,6 +29,7 @@ main = return ()
   --   _ -> error "please pass one argument with the string to parse"
 
 data LoxObject = JString | JDouble
+  deriving (Show, Eq)
 
 data LoxTok =
   -- Single-character tokens.
@@ -51,12 +53,12 @@ data LoxTok =
   deriving (Show, Eq)
 
 data LoxTokInfo = LoxTokInfo {
-  token_type:: LoxTok,
-  lexeme:: T.Text,
-  literal:: LoxObject,
-  start_pos:: (Int, Int),
-  end_pos:: (Int, Int)
+  tokinfo_type:: LoxTok,
+  tokinfo_lexeme:: Maybe T.Text,
+  tokinfo_literal:: Maybe LoxObject,
+  tok_position:: SourcePos
   }
+  deriving (Show, Eq)
 
 
 type LoxScanner = Parser
@@ -71,46 +73,52 @@ lexeme_scan p = p <* whitespace
 
 -- token :: Char -> LoxScanner LoxTok
 
-scanSingleCharToken :: Parser LoxTok
-scanSingleCharToken = choice $ build <$> char_mapping
-  where
-    build :: (LoxTok, Char) -> Parser LoxTok
-    build (x, y) = x <$ char y <* whitespace
-
-
 char_mapping :: [(LoxTok, Char)]
 char_mapping =
-  [
- (LEFT_PAREN, '('),
- (RIGHT_PAREN, ')'),
- (LEFT_BRACE, '{'),
- (RIGHT_BRACE, '}'),
- (COMMA, ','),
- (DOT, '.'),
- (MINUS, '-'),
- (PLUS, '+'),
- (SEMICOLON, '-'),
- (SLASH, '/'),
- (STAR, '*'),
- (BANG, '!'),
- (EQUAL, '='),
- (GREATER, '>'),
- (LESS, '<')
- ]
+  [ (LEFT_PAREN, '('),
+    (RIGHT_PAREN, ')'),
+    (LEFT_BRACE, '{'),
+    (RIGHT_BRACE, '}'),
+    (COMMA, ','),
+    (DOT, '.'),
+    (MINUS, '-'),
+    (PLUS, '+'),
+    (SEMICOLON, '-'),
+    (SLASH, '/'),
+    (STAR, '*'),
+    (BANG, '!'),
+    (EQUAL, '='),
+    (GREATER, '>'),
+    (LESS, '<')
+  ]
 
-scanDoubleToken :: Parser LoxTok
-scanDoubleToken = choice $ build <$> double_char_mapping
-  where
-    build :: (LoxTok, String) -> Parser LoxTok
-    build (x, y) = x <$ string y <* whitespace
+scanSingleCharToken :: Parser LoxTokInfo
+scanSingleCharToken = do
+  source_pos <- getPosition
+  sel <- choice $ build <$> char_mapping
+  return $ LoxTokInfo sel Nothing Nothing source_pos
+    where
+      build :: (LoxTok, Char) -> Parser LoxTok
+      build (x, y) = x <$ char y <* whitespace
+
+  -- return _ -- $ --LoxTokInfo sel "" "" source_pos
 
 double_char_mapping :: [(LoxTok, String)]
 double_char_mapping =
-  [(BANG_EQUAL, "!="),
-  (EQUAL_EQUAL, "=="),
-  (GREATER_EQUAL, ">="),
-  (LESS_EQUAL, "<=")
+  [ (BANG_EQUAL, "!="),
+    (EQUAL_EQUAL, "=="),
+    (GREATER_EQUAL, ">="),
+    (LESS_EQUAL, "<=")
   ]
+
+scanDoubleToken :: Parser LoxTokInfo
+scanDoubleToken = do
+  source_pos <- getPosition
+  sel <- choice $ build <$> double_char_mapping
+  return $ LoxTokInfo sel Nothing Nothing source_pos
+  where
+    build :: (LoxTok, String) -> Parser LoxTok
+    build (x, y) = x <$ string y <* whitespace
 
 keyword_mapping :: [(LoxTok, String)]
 keyword_mapping =
@@ -133,13 +141,30 @@ keyword_mapping =
     (WHILE, "while")
     ]
 
-scanKeywordToken :: Parser LoxTok
-scanKeywordToken = choice $ build <$> keyword_mapping
+scanKeywordToken :: Parser LoxTokInfo
+scanKeywordToken = do
+  source_pos <- getPosition
+  sel <- choice $ build <$> keyword_mapping
+  return $ LoxTokInfo sel Nothing Nothing source_pos
   where
     build :: (LoxTok, String) -> Parser LoxTok
     build (x, y) = x <$ string y <* whitespace
 
--- https://stackoverflow.com/questions/24106314/parser-for-quoted-string-using-parsec
+scanDouble :: Parser LoxTokInfo
+scanDouble = do
+  source_pos <- getPosition
+  sel <- do
+    firstPart <- Text.Parsec.many1 digit
+    try (secondCharacter firstPart) <|> NUMBER (read firstPart) <$ whitespace
+  return $ LoxTokInfo sel Nothing Nothing source_pos
+  where
+    secondCharacter :: String -> Parser LoxTok
+    secondCharacter firstPart = do
+      void $ char '.'
+      secondPart <- Text.Parsec.many1 digit
+      return $ NUMBER $ read $ Import.concat [firstPart, ".", secondPart]
+
+-- -- https://stackoverflow.com/questions/24106314/parser-for-quoted-string-using-parsec
 escape :: Parser String
 escape = do
   d <- char '\\'
@@ -152,45 +177,35 @@ nonEscape = noneOf "\\\"\0\n\r\v\t\b\f"
 character :: Parser String
 character = fmap return nonEscape <|> escape
 
-scanQuotedString :: Parser LoxTok
+scanQuotedString :: Parser LoxTokInfo
 scanQuotedString = do
-  char '"'
-  strings <- many character
-  char '"' <* whitespace
-  return $ STRING $ Import.concat strings
+  source_pos <- getPosition
+  string <- char '"' *> many character <* char '"' <* whitespace
+  return $ LoxTokInfo (STRING $ Import.concat string) Nothing Nothing source_pos
 
-scanDouble :: Parser LoxTok
-scanDouble = do
-  firstPart <- Text.Parsec.many1 digit
-  try (secondCharacter firstPart) <|> return (NUMBER $ read firstPart) <* whitespace
-  where
-    secondCharacter :: String -> Parser LoxTok
-    secondCharacter firstPart = do
-      void $ char '.'
-      secondPart <- Text.Parsec.many1 digit
-      return $ NUMBER $ read $ Import.concat [firstPart, ".", secondPart]
-
--- http://jakewheat.github.io/intro_to_parsing/#_var
+-- -- http://jakewheat.github.io/intro_to_parsing/#_var
 var :: Parser String
 var = do
   fc <- firstChar
   rest <- many nonFirstChar
-  return $ (fc : rest)
+  return (fc : rest)
   where
     firstChar = satisfy (\a -> isLetter a || a == '_')
     nonFirstChar = satisfy (\a -> isDigit a || isLetter a || a == '_')
 
-checkIfIdentifier :: Parser LoxTok
+checkIfIdentifier :: Parser LoxTokInfo
 checkIfIdentifier = do
+  source_pos <- getPosition
   s <- var
-  result ([(x, y) | (x, y) <- keyword_mapping, y == s]) s
+  result ([(x, y) | (x, y) <- keyword_mapping, y == s]) s source_pos
   where
-    result xs s = do
+    result xs s source_pos = do
       case xs of
-        [] -> return $ IDENTIFIER s
-        (x, _):_ -> return x
+        [] -> return $ LoxTokInfo (IDENTIFIER s) Nothing Nothing source_pos
+        (x, _):_ -> return $ LoxTokInfo x Nothing Nothing  source_pos
 
-scanToken :: Parser LoxTok
+
+scanToken :: Parser LoxTokInfo
 scanToken =
   try scanDoubleToken <|>
   try scanSingleCharToken <|>
@@ -198,6 +213,5 @@ scanToken =
   try scanDouble <|>
   checkIfIdentifier
 
-
-scanner :: String -> Either ParseError [LoxTok]
+scanner :: String -> Either ParseError [LoxTokInfo]
 scanner =  parse (many scanToken <* eof) ""
