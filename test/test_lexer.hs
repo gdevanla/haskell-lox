@@ -54,7 +54,7 @@ testSingleCharInvalidToken = testInvalidToken "testSingleCharInvalidToken" "%"
 
 testDoubleCharInvalidToken = testInvalidToken "testDoubleCharInvalidToken" "%%"
 
-testScanInvalidDouble = testInvalidToken "testScanInvalidDouble" ".1121"
+testScanInvalidDOT = testInvalidToken "testScanInvalidDoubleDOT" ".1121"
 
 testScanInvalidIdentifier_1 = testInvalidToken "testScanInvalidIdentifier_1" "1and"
 testScanInvalidIdentifier_2 = testInvalidToken "testScanInvalidIdentifier_2" "1_and"
@@ -70,14 +70,15 @@ main = do
     testScanDouble_1,
     testScanDouble_2,
 
+
     testScanDouble_4,
     testScanIdentifier,
     -- invalid tokens
-    testScanInvalidDouble,
     testSingleCharInvalidToken,
     testDoubleCharInvalidToken,
     testScanInvalidIdentifier_1,
     testScanInvalidIdentifier_2,
+    testScanInvalidDOT,
     testComment_1,
     testComment_2
     ]

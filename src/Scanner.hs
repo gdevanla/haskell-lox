@@ -1,6 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE TemplateHaskell #-}
 
 module Scanner where
 
@@ -15,39 +14,67 @@ import RIO.Partial (read)
 data LoxObject = JString | JDouble
   deriving (Show, Eq)
 
-data LoxTok =
-  -- Single-character tokens.
-  LEFT_PAREN| RIGHT_PAREN| LEFT_BRACE| RIGHT_BRACE|
-  COMMA| DOT| MINUS| PLUS| SEMICOLON| SLASH| STAR|
-
-  -- One or two character tokens.
-  BANG| BANG_EQUAL|
-  EQUAL| EQUAL_EQUAL|
-  GREATER| GREATER_EQUAL|
-  LESS| LESS_EQUAL|
-
-  -- Literals.
-  IDENTIFIER String| STRING String| NUMBER Double|
-
-  -- Keywords.
-  AND| CLASS| ELSE| FALSE| FUN| FOR| IF| NIL| OR|
-  PRINT| RETURN| SUPER| THIS| TRUE| VAR| WHILE|
-
-  WHITESPACE | COMMENT Text|
-
-  EOF
+data LoxTok
+  = -- Single-character tokens.
+    LEFT_PAREN
+  | RIGHT_PAREN
+  | LEFT_BRACE
+  | RIGHT_BRACE
+  | COMMA
+  | DOT
+  | MINUS
+  | PLUS
+  | SEMICOLON
+  | SLASH
+  | STAR
+  | -- One or two character tokens.
+    BANG
+  | BANG_EQUAL
+  | EQUAL
+  | EQUAL_EQUAL
+  | GREATER
+  | GREATER_EQUAL
+  | LESS
+  | LESS_EQUAL
+  | -- Literals.
+    IDENTIFIER String
+  | STRING String
+  | NUMBER Double
+  | COMMENT Text
+   -- Keywords.
+  | AND
+  | CLASS
+  | ELSE
+  | FALSE
+  | FUN
+  | FOR
+  | IF
+  | NIL
+  | OR
+  | PRINT
+  | RETURN
+  | SUPER
+  | THIS
+  | TRUE
+  | VAR
+  | WHILE
+  | WHITESPACE
+  | EOF
   deriving (Show, Eq)
 
-data LoxTokInfo = LoxTokInfo {
-  tokinfo_type:: LoxTok,
-  tokinfo_lexeme:: Maybe T.Text,
-  tokinfo_literal:: Maybe LoxObject,
-  tok_position:: SourcePos
+data LoxTokInfo = LoxTokInfo
+  { tokinfo_type :: LoxTok,
+    tokinfo_lexeme :: Maybe T.Text,
+    tokinfo_literal :: Maybe LoxObject,
+    tok_position :: SourcePos
   }
   deriving (Show, Eq)
 
 
-type LoxScanner = Parser
+tokenShow :: LoxTokInfo -> String
+tokenShow t = "LoxTok=" ++ show (tokinfo_type t)
+
+type LoxScannerResult = Either ParseError [LoxTokInfo]
 -- type LoxScanner = Parsec String () [LoxTok]
 
 whitespace :: Parser ()
@@ -59,18 +86,6 @@ whitespace = void $ many $ oneOf " \n\t"
 --   return $ LoxTokInfo WHITESPACE Nothing Nothing source_pos
 
 whitespaceToken :: Parser LoxTokInfo
-whitespaceToken = do
-  source_pos <- getPosition
-  _ <- many1 $ oneOf " "
-  return $ LoxTokInfo WHITESPACE Nothing Nothing source_pos
-
-scanComment :: Parser LoxTokInfo
-scanComment = do
-  source_pos <- getPosition
-  _ <- string "//"
-  comment <- try (manyTill anyToken (try (oneOf "\n"))) <|> manyTill anyToken eof
-  return $ LoxTokInfo (COMMENT (T.pack comment)) Nothing Nothing source_pos
-
 charMapping :: [(LoxTok, Char)]
 charMapping =
   [ (LEFT_PAREN, '('),
@@ -95,9 +110,9 @@ scanSingleCharToken = do
   source_pos <- getPosition
   sel <- choice $ build <$> charMapping
   return $ LoxTokInfo sel Nothing Nothing source_pos
-    where
-      build :: (LoxTok, Char) -> Parser LoxTok
-      build (x, y) = x <$ char y <* whitespace
+  where
+    build :: (LoxTok, Char) -> Parser LoxTok
+    build (x, y) = x <$ char y <* whitespace
 
 doubleCharMapping :: [(LoxTok, String)]
 doubleCharMapping =
@@ -118,8 +133,7 @@ scanDoubleToken = do
 
 keywordMapping :: [(LoxTok, String)]
 keywordMapping =
-  [
-    (AND, "and"),
+  [ (AND, "and"),
     (CLASS, "class"),
     (ELSE, "else"),
     (FALSE, "false"),
@@ -135,7 +149,7 @@ keywordMapping =
     (TRUE, "true"),
     (VAR, "var"),
     (WHILE, "while")
-    ]
+  ]
 
 scanKeywordToken :: Parser LoxTokInfo
 scanKeywordToken = do
@@ -146,13 +160,18 @@ scanKeywordToken = do
     build :: (LoxTok, String) -> Parser LoxTok
     build (x, y) = x <$ string y <* whitespace
 
+whitespaceToken = do
+  source_pos <- getPosition
+  _ <- many1 $ char ' '
+  return $ LoxTokInfo WHITESPACE Nothing Nothing source_pos
+
 scanDouble :: Parser LoxTokInfo
 scanDouble = do
   source_pos <- getPosition
-  sel <- (do
+  let la = lookAhead (whitespaceToken <|> scanSingleCharToken)
+  sel <- do
     firstPart <- Text.Parsec.many1 digit
-    try (secondCharacter firstPart) <|> return (NUMBER (read firstPart)))
-  _ <- lookAhead (scanSingleCharToken <|> whitespaceToken)
+    try (secondCharacter firstPart <* la <* whitespace) <|> NUMBER (read firstPart) <$ la <* whitespace
   return $ LoxTokInfo sel Nothing Nothing source_pos
   where
     secondCharacter :: String -> Parser LoxTok
@@ -199,18 +218,24 @@ checkIfIdentifier = do
     result xs s source_pos = do
       case xs of
         [] -> return $ LoxTokInfo (IDENTIFIER s) Nothing Nothing source_pos
-        (x, _):_ -> return $ LoxTokInfo x Nothing Nothing  source_pos
+        (x, _) : _ -> return $ LoxTokInfo x Nothing Nothing source_pos
 
+scanComment :: Parser LoxTokInfo
+scanComment = do
+  source_pos <- getPosition
+  _ <- string "//"
+  -- TODO: Find a better way to do this, scanning this more than once is not desirable
+  comment <- try (manyTill anyToken (try (oneOf "\n"))) <|> manyTill anyToken eof
+  return $ LoxTokInfo (COMMENT (T.pack comment)) Nothing Nothing source_pos
 
 scanToken :: Parser LoxTokInfo
 scanToken =
-  try scanComment <|>
-  try scanDoubleToken <|>
-  try scanSingleCharToken <|>
-  try scanQuotedString <|>
-  try scanDouble <|>
-  checkIfIdentifier
+  try scanComment
+    <|> try scanDoubleToken
+    <|> try scanSingleCharToken
+    <|> try scanQuotedString
+    <|> scanDouble
+    <|> checkIfIdentifier
 
-
-scanner :: String -> Either ParseError [LoxTokInfo]
-scanner =  parse (many scanToken <* eof) ""
+scanner :: String -> LoxScannerResult
+scanner = parse (many scanToken <* eof) ""
