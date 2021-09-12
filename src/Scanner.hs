@@ -179,7 +179,6 @@ scanDouble = do
       void $ char '.'
       secondPart <- Text.Parsec.many1 digit <* whitespace
       return $ NUMBER $ read $ Import.concat [firstPart, ".", secondPart]
-
 -- -- https://stackoverflow.com/questions/24106314/parser-for-quoted-string-using-parsec
 escape :: Parser String
 escape = do

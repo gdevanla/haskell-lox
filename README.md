@@ -2,7 +2,7 @@
 
 Implementation of `Lox` interpreter as described in [Crafting Interpreters](https://craftinginterpreters.com/).
 
-1. [Scanning](Scanner.hs) - [Commentary](https://gdevanla.github.io/posts/crafting-interpreter-scanning.html)
+1. [Scanning](src/Scanner.hs) - [Commentary](https://gdevanla.github.io/posts/crafting-interpreter-scanning.html)
 
 
 ## Execute
