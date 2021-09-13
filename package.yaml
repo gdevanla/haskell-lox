@@ -21,6 +21,9 @@ description:         Please see the README on Github at <https://github.com/gith
 
 dependencies:
 - base >= 4.11 && < 10
+# I personally wouldn't depend on rio for the purposes of a blog series
+# rio's great, but it's a commitment to an ecosystem, not really a standard
+# library like the other dependencies.
 - rio >= 0.1.12.0
 - array >= 0.5.4.0
 - text >= 1.2.4.1
