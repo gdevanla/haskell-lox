@@ -20,7 +20,7 @@ testToken test_name token_str expected_tok = testCase test_name $ do
   let result = scanner token_str
   case result of
     Left x -> assertFailure $ show x
-    Right (x : _) -> assertEqual token_str (tokinfo_type x) expected_tok
+    Right (x : _) -> assertEqual token_str (tok x) expected_tok
 
 
 
@@ -30,23 +30,23 @@ testInvalidToken test_name token_str = testCase test_name $ do
     Left x -> return ()
     Right x -> assertFailure $ show x
 
-testSingleCharToken = testToken "testSingleCharToken" "+" PLUS
+testSingleCharToken = testToken "testSingleCharToken" "+" (OpTok Plus)
 
-testDoubleCharToken = testToken "testDoubleCharToken"  "==" EQUAL_EQUAL
+testDoubleCharToken = testToken "testDoubleCharToken"  "==" (OpTok Eq)
 
-testKeywordToken = testToken "testKeywordToken" "class" CLASS
+testKeywordToken = testToken "testKeywordToken" "class" Class
 
-testScanDouble_1 = testToken "testScanDouble_1" "1121.1121;" (NUMBER 1121.1121)
-testScanDouble_2 = testToken "testScanDouble_2" "0.1121;" (NUMBER 0.1121)
+testScanDouble_1 = testToken "testScanDouble_1" "1121.1121;" (Number 1121.1121)
+testScanDouble_2 = testToken "testScanDouble_2" "0.1121;" (Number 0.1121)
 
 -- We don't like the Lexer doing this, but we will try handling these scenarios in the parser
 
-testScanDouble_4 = testToken "testScanDouble_4" "1121." (NUMBER 1121.0)
+testScanDouble_4 = testToken "testScanDouble_4" "1121." (Number 1121.0)
 
 
 testScanDoubleInvalid_2 = testInvalidToken "testScanDouble_2" "1121."
 
-testScanIdentifier = testToken "testScanIdentifier" "and_1" (IDENTIFIER "and_1")
+testScanIdentifier = testToken "testScanIdentifier" "and_1" (Identifier "and_1")
 
 -- invalid tokens
 
@@ -59,8 +59,8 @@ testScanInvalidDOT = testInvalidToken "testScanInvalidDoubleDOT" ".1121"
 testScanInvalidIdentifier_1 = testInvalidToken "testScanInvalidIdentifier_1" "1and"
 testScanInvalidIdentifier_2 = testInvalidToken "testScanInvalidIdentifier_2" "1_and"
 
-testComment_1 = testToken "testComment" "// this is a comment" (COMMENT " this is a comment")
-testComment_2 = testToken "testComment" "// this is a comment\n" (COMMENT " this is a comment")
+testComment_1 = testToken "testComment" "// this is a comment" (Comment " this is a comment")
+testComment_2 = testToken "testComment" "// this is a comment\n" (Comment " this is a comment")
 
 main = do
   defaultMain $ testGroup "tokenizer_tests_example_1" [
