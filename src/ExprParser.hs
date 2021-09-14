@@ -3,19 +3,17 @@
 
 module ExprParser where
 
-import Import hiding (many, (<|>), try)
-import Data.Text as T
 import Data.Char
+import Data.Text as T
+import Import hiding (many, try, (<|>))
 --import Text.Parsec.String as PS
 --import Text.Parsec.Char as PC
-import Text.Parsec
-
-import Text.Parsec.Prim
-import Text.Parsec.Combinator
 
 import RIO.Partial (read)
 import Scanner
-
+import Text.Parsec
+import Text.Parsec.Combinator
+import Text.Parsec.Prim
 
 -- expression     → equality ;
 -- equality       → comparison ( ( "!=" | "==" ) comparison )* ;
@@ -41,7 +39,8 @@ import Scanner
 
 type LoxParserResult = Either ParseError Expr
 
-data BinOp = NotEqual | EqualEqual | GT | GTE | LT | LTE | Plus | Minus | Star | Slash
+data BinOp = NotEqual | EqualEqual | Gt | Gte | Lt | Lte | Plus | Minus | Star | Slash
+
 data UnaryOp = UnaryMinus | UnaryBang
 
 data Expr
@@ -52,7 +51,6 @@ data Expr
   | Paren Expr
   | Unary UnaryOp Expr
   | Binary Expr BinOp Expr
-
 
 -- satisfy = tokenPrim (t -> String) (SourcePos -> t -> s -> SourcePos) (t -> Maybe a)
 
@@ -67,7 +65,7 @@ satisfyT :: (LoxTokInfo -> Bool) -> Parser LoxTokInfo
 satisfyT f = tokenPrim showTok updateTokPos match
   where
     showTok ti = show $ tokinfo_type ti
-    updateTokPos _ _ (s:_) = tok_position s
+    updateTokPos _ _ (s : _) = tok_position s
     updateTokPos pos _ [] = pos
     match t = if f t then Just t else Nothing
 
@@ -88,7 +86,7 @@ literal = do
     f _ = False
 
 loxBool :: Parser Expr
-loxBool  = do
+loxBool = do
   tokInfo <- satisfyT f
   return $ f1 tokInfo
   where
@@ -107,7 +105,6 @@ loxNil = do
   where
     f (LoxTokInfo NIL _ _ _) = True
     f _ = False
-
 
 loxExpr :: Parser Expr
 loxExpr = undefined
@@ -132,3 +129,27 @@ unary = Unary <$> (op' <$> satisfyT f) <*> loxExpr
     op' (LoxTokInfo BANG _ _ _) = UnaryBang
     op' (LoxTokInfo MINUS _ _ _) = UnaryMinus
     op' _ = error "satisfy must be wrong for unary op"
+
+
+binary :: Parser Expr
+binary = do
+  l <- loxExpr
+  op <- satisfyT (f . tokinfo_type)
+  r <- loxExpr
+  return $ Binary l (op' (tokinfo_type op)) r
+  where
+    f x
+      | x `elem` [BANG_EQUAL, EQUAL, GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, PLUS, MINUS, STAR, SLASH] = True
+      | otherwise = False
+
+    op' BANG_EQUAL = NotEqual
+    op' EQUAL = EqualEqual
+    op' GREATER = Gt
+    op' GREATER_EQUAL = Gte
+    op' LESS = Lt
+    op' LESS_EQUAL = Lte
+    op' PLUS = Plus
+    op' MINUS = Minus
+    op' STAR = Star
+    op' SLASH = Slash
+    op' _ = error "Satisfy probably wrong"
