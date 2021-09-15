@@ -139,32 +139,9 @@ unary' = Unary <$> (op' <$> satisfyT f) <*> unary
 unary :: Parser Expr
 unary = unary' <|> loxPrimary
 
--- factor :: Parser Expr
--- factor = do
---   expr <- unary
---   try (secondPart expr) <|> return expr
---   where
---     secondPart expr1 = Binary expr1 <$> (op' <$> satisfyT f) <*> unary
---     f x = case tokinfo_type x of
---       x' | x' `elem` [STAR, SLASH] -> True
---          | otherwise -> False
-
---     op' (LoxTokInfo SLASH _ _ _) = Slash
---     op' (LoxTokInfo STAR _ _ _) = Star
---     op' _ = error "satisfy must be wrong for unary op"
-
 factor :: Parser Expr
-factor = do
-  expr <- unary
-  maybeAddSuffix expr
+factor = leftChain unary (op' <$> satisfyT f)
   where
-    addSuffix e0 = do
-      op <- op' <$> satisfyT f
-      e1 <- unary
-      maybeAddSuffix (Binary e0 op e1)
-
-    maybeAddSuffix e = addSuffix e <|> return e
-
     f x = case tokinfo_type x of
       x' | x' `elem` [STAR, SLASH] -> True
          | otherwise -> False
@@ -173,13 +150,24 @@ factor = do
     op' (LoxTokInfo STAR _ _ _) = Star
     op' _ = error "satisfy must be wrong for unary op"
 
+-- this is similar to chainl in `Text.Parsec` but works on `BinOp`
+-- adopted from https://jakewheat.github.io/intro_to_parsing/
+leftChain :: Parser Expr -> Parser BinOp -> Parser Expr
+leftChain p op = do
+  expr <- p
+  maybeAddSuffix expr
+  where
+    addSuffix e0 = do
+      op' <- op
+      e1 <- p
+      maybeAddSuffix (Binary e0 op' e1)
+
+    maybeAddSuffix e = addSuffix e <|> return e
+
 
 term :: Parser Expr
-term = do
-  expr <- factor
-  try (secondPart expr) <|> return expr
+term = leftChain factor (op' <$> satisfyT f)
   where
-    secondPart expr1 = Binary expr1 <$> (op' <$> satisfyT f) <*> factor
     f x = case tokinfo_type x of
       x' | x' `elem` [MINUS, PLUS] -> True
          | otherwise -> False
@@ -188,13 +176,9 @@ term = do
     op' (LoxTokInfo PLUS _ _ _) = Plus
     op' _ = error "satisfy must be wrong for unary op"
 
-
 comparison :: Parser Expr
-comparison = do
-  expr <- term
-  try (secondPart expr) <|> return expr
+comparison = leftChain term (op' <$> satisfyT f)
   where
-    secondPart expr1 = Binary expr1 <$> (op' <$> satisfyT f) <*> term
     f x = case tokinfo_type x of
       x' | x' `elem` [GREATER, GREATER_EQUAL, LESS, LESS_EQUAL] -> True
          | otherwise -> False
@@ -207,17 +191,14 @@ comparison = do
 
 
 equality :: Parser Expr
-equality = do
-  expr <- comparison
-  try (secondPart expr) <|> return expr
+equality = leftChain comparison (op' <$> satisfyT f)
   where
-    secondPart expr1 = Binary expr1 <$> (op' <$> satisfyT f) <*> comparison
     f x = case tokinfo_type x of
       x' | x' `elem` [BANG_EQUAL , EQUAL_EQUAL] -> True
          | otherwise -> False
 
     op' (LoxTokInfo BANG_EQUAL _ _ _) = NotEqual
-    op' (LoxTokInfo EQUAL _ _ _) = EqualEqual
+    op' (LoxTokInfo EQUAL_EQUAL _ _ _) = EqualEqual
     op' _ = error "satisfy must be wrong for unary op"
 
 
@@ -226,26 +207,3 @@ loxExpr = equality
 
 scannerLoxTokens :: [LoxTokInfo] -> LoxParserResult
 scannerLoxTokens = parse loxExpr ""
-
--- binary :: Parser Expr
--- binary = do
---   l <- loxExpr
---   op <- satisfyT (f . tokinfo_type)
---   r <- loxExpr
---   return $ Binary l (op' (tokinfo_type op)) r
---   where
---     f x
---       | x `elem` [BANG_EQUAL, EQUAL, GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, PLUS, MINUS, STAR, SLASH] = True
---       | otherwise = False
-
---     op' BANG_EQUAL = NotEqual
---     op' EQUAL = EqualEqual
---     op' GREATER = Gt
---     op' GREATER_EQUAL = Gte
---     op' LESS = Lt
---     op' LESS_EQUAL = Lte
---     op' PLUS = Plus
---     op' MINUS = Minus
---     op' STAR = Star
---     op' SLASH = Slash
---     op' _ = error "Satisfy probably wrong"
