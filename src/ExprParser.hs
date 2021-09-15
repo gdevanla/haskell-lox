@@ -57,95 +57,75 @@ data Expr
 
 type Parser a = ParsecT [LoxTokInfo] () Identity a
 
-satisfyT :: (LoxTokInfo -> Bool) -> Parser LoxTokInfo
+satisfyT :: (LoxTokInfo -> Maybe a) -> Parser a
 satisfyT f = tokenPrim showTok updateTokPos match
   where
     showTok ti = show $ tokinfo_type ti
     updateTokPos _ _ (s : _) = tok_position s
     updateTokPos pos _ [] = pos
-    match t = if f t then Just t else Nothing
+    match t = f t
+
 
 number :: Parser Expr
-number = do
-  tokInfo <- satisfyT f
-  return $ Number (value tokInfo)
+number = satisfyT f
   where
-    f (LoxTokInfo (NUMBER _) _ _ _) = True
-    f _ = False
-
-    value (LoxTokInfo (NUMBER x) _ _ _) = x
-    value _ = error "Bad Satisfy for number"
+    f (LoxTokInfo (NUMBER x) _ _ _) = Just (Number x)
+    f _ = Nothing
 
 literal :: Parser Expr
-literal = do
-  tokInfo <- satisfyT f
-  return $ Literal (value tokInfo)
+literal = satisfyT f
   where
-    f (LoxTokInfo (STRING _) _ _ _) = True
-    f _ = False
+    f (LoxTokInfo (STRING x) _ _ _) = Just (Literal $ T.pack x)
+    f _ = Nothing
 
-    value (LoxTokInfo (STRING x) _ _ _) = T.pack x
-    value _ = error "Bad Satisfy for literal"
 
 loxBool :: Parser Expr
-loxBool = do
-  tokInfo <- satisfyT f
-  return $ f1 tokInfo
+loxBool = satisfyT f
   where
-    f (LoxTokInfo TRUE _ _ _) = True
-    f (LoxTokInfo FALSE _ _ _) = True
-    f _ = False
+    f (LoxTokInfo TRUE _ _ _) = Just (LoxBool True)
+    f (LoxTokInfo FALSE _ _ _) = Just (LoxBool False)
+    f _ = Nothing
 
-    f1 (LoxTokInfo TRUE _ _ _) = LoxBool True
-    f1 (LoxTokInfo FALSE _ _ _) = LoxBool False
-    f1 _ = error "Satisy function must be wrong for loxBool"
 
 loxNil :: Parser Expr
-loxNil = do
-  void $ satisfyT f
-  return LoxNil
+loxNil = satisfyT f
   where
-    f (LoxTokInfo NIL _ _ _) = True
-    f _ = False
+    f (LoxTokInfo NIL _ _ _) = Just LoxNil
+    f _ = Nothing
 
 loxParenExpr :: Parser Expr
 loxParenExpr = do
   satisfyT parenOpen *> loxExpr <* satisfyT parenClose
   where
-    parenOpen (LoxTokInfo LEFT_PAREN _ _ _) = True
-    parenOpen _ = False
+    -- use LoxNil as placeholder, since we do not have an equilivalent Expr for Paren
+    parenOpen (LoxTokInfo LEFT_PAREN _ _ _) = Just ()
+    parenOpen _ = Nothing
 
-    parenClose (LoxTokInfo RIGHT_PAREN _ _ _) = True
-    parenClose _ = False
+    parenClose (LoxTokInfo RIGHT_PAREN _ _ _) = Just ()
+    parenClose _ = Nothing
 
 loxPrimary :: Parser Expr
 loxPrimary = number <|> literal <|> loxBool <|> loxNil <|> loxParenExpr
 
 unary' :: Parser Expr
-unary' = Unary <$> (op' <$> satisfyT f) <*> unary
+unary' = Unary <$> satisfyT f <*> unary
   where
-    f (LoxTokInfo BANG _ _ _) = True
-    f (LoxTokInfo MINUS _ _ _) = True
-    f _ = False
+    f (LoxTokInfo BANG _ _ _) = Just UnaryBang
+    f (LoxTokInfo MINUS _ _ _) = Just UnaryMinus
+    f _ = Nothing
 
-    op' (LoxTokInfo BANG _ _ _) = UnaryBang
-    op' (LoxTokInfo MINUS _ _ _) = UnaryMinus
-    op' _ = error "satisfy must be wrong for unary op"
 
 unary :: Parser Expr
 unary = unary' <|> loxPrimary
 
 factor :: Parser Expr
-factor = leftChain unary (op' <$> satisfyT f)
+factor = leftChain unary (satisfyT f)
   where
     f x = case tokinfo_type x of
-      x'
-        | x' `elem` [STAR, SLASH] -> True
-        | otherwise -> False
+      STAR -> Just Star
+      SLASH -> Just Slash
+      _ -> Nothing
 
-    op' (LoxTokInfo SLASH _ _ _) = Slash
-    op' (LoxTokInfo STAR _ _ _) = Star
-    op' _ = error "satisfy must be wrong for unary op"
 
 -- this is similar to chainl in `Text.Parsec` but works on `BinOp`
 -- adopted from https://jakewheat.github.io/intro_to_parsing/
@@ -162,42 +142,32 @@ leftChain p op = do
     maybeAddSuffix e = addSuffix e <|> return e
 
 term :: Parser Expr
-term = leftChain factor (op' <$> satisfyT f)
+term = leftChain factor (satisfyT f)
   where
     f x = case tokinfo_type x of
-      x'
-        | x' `elem` [MINUS, PLUS] -> True
-        | otherwise -> False
+      MINUS -> Just Minus
+      PLUS -> Just Plus
+      _ -> Nothing
 
-    op' (LoxTokInfo MINUS _ _ _) = Minus
-    op' (LoxTokInfo PLUS _ _ _) = Plus
-    op' _ = error "satisfy must be wrong for unary op"
 
 comparison :: Parser Expr
-comparison = leftChain term (op' <$> satisfyT f)
+comparison = leftChain term (satisfyT f)
   where
     f x = case tokinfo_type x of
-      x'
-        | x' `elem` [GREATER, GREATER_EQUAL, LESS, LESS_EQUAL] -> True
-        | otherwise -> False
-
-    op' (LoxTokInfo GREATER _ _ _) = Gt
-    op' (LoxTokInfo GREATER_EQUAL _ _ _) = Gte
-    op' (LoxTokInfo LESS _ _ _) = Lt
-    op' (LoxTokInfo LESS_EQUAL _ _ _) = Lte
-    op' _ = error "satisfy must be wrong for unary op"
+      GREATER -> Just Gt
+      GREATER_EQUAL -> Just Gte
+      LESS -> Just Lt
+      LESS_EQUAL -> Just Lte
+      _ -> Nothing
 
 equality :: Parser Expr
-equality = leftChain comparison (op' <$> satisfyT f)
+equality = leftChain comparison (satisfyT f)
   where
     f x = case tokinfo_type x of
-      x'
-        | x' `elem` [BANG_EQUAL, EQUAL_EQUAL] -> True
-        | otherwise -> False
+      BANG_EQUAL -> Just NotEqual
+      EQUAL_EQUAL -> Just EqualEqual
+      _ -> Nothing
 
-    op' (LoxTokInfo BANG_EQUAL _ _ _) = NotEqual
-    op' (LoxTokInfo EQUAL_EQUAL _ _ _) = EqualEqual
-    op' _ = error "satisfy must be wrong for equality op"
 
 loxExpr :: Parser Expr
 loxExpr = equality
