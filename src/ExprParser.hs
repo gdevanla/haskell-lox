@@ -139,12 +139,32 @@ unary' = Unary <$> (op' <$> satisfyT f) <*> unary
 unary :: Parser Expr
 unary = unary' <|> loxPrimary
 
+-- factor :: Parser Expr
+-- factor = do
+--   expr <- unary
+--   try (secondPart expr) <|> return expr
+--   where
+--     secondPart expr1 = Binary expr1 <$> (op' <$> satisfyT f) <*> unary
+--     f x = case tokinfo_type x of
+--       x' | x' `elem` [STAR, SLASH] -> True
+--          | otherwise -> False
+
+--     op' (LoxTokInfo SLASH _ _ _) = Slash
+--     op' (LoxTokInfo STAR _ _ _) = Star
+--     op' _ = error "satisfy must be wrong for unary op"
+
 factor :: Parser Expr
 factor = do
   expr <- unary
-  try (secondPart expr) <|> return expr
+  maybeAddSuffix expr
   where
-    secondPart expr1 = Binary expr1 <$> (op' <$> satisfyT f) <*> unary
+    addSuffix e0 = do
+      op <- op' <$> satisfyT f
+      e1 <- unary
+      maybeAddSuffix (Binary e0 op e1)
+
+    maybeAddSuffix e = addSuffix e <|> return e
+
     f x = case tokinfo_type x of
       x' | x' `elem` [STAR, SLASH] -> True
          | otherwise -> False
@@ -174,7 +194,7 @@ comparison = do
   expr <- term
   try (secondPart expr) <|> return expr
   where
-    secondPart expr1 = Binary expr1 <$> (op' <$> satisfyT f) <*> comparison
+    secondPart expr1 = Binary expr1 <$> (op' <$> satisfyT f) <*> term
     f x = case tokinfo_type x of
       x' | x' `elem` [GREATER, GREATER_EQUAL, LESS, LESS_EQUAL] -> True
          | otherwise -> False
