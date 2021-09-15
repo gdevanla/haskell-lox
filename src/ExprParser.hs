@@ -8,6 +8,7 @@ import Import hiding (many, try, (<|>))
 import Scanner
 import Text.Parsec
 
+-- https://craftinginterpreters.com/parsing-expressions.html
 -- expression     → equality ;
 -- equality       → comparison ( ( "!=" | "==" ) comparison )* ;
 -- comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
