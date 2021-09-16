@@ -65,7 +65,22 @@ satisfyT f = tokenPrim showTok updateTokPos match
     updateTokPos pos _ [] = pos
     match t = f t
 
+-- this is similar to chainl in `Text.Parsec` but works on `BinOp`
+-- adopted from https://jakewheat.github.io/intro_to_parsing/
+leftChain :: Parser Expr -> Parser BinOp -> Parser Expr
+leftChain p op = do
+  expr <- p
+  maybeAddSuffix expr
+  where
+    addSuffix e0 = do
+      op' <- op
+      e1 <- p
+      maybeAddSuffix (Binary e0 op' e1)
 
+    maybeAddSuffix e = addSuffix e <|> return e
+
+
+-- primary
 number :: Parser Expr
 number = satisfyT f
   where
