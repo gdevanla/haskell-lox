@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Scanner where
+module Scanner(LoxTok(..), LoxTokInfo(..), scanner) where
 
 import Import hiding (many, (<|>), try)
 import Data.Text as T
