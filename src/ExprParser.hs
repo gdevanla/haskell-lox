@@ -141,21 +141,6 @@ factor = leftChain unary (satisfyT f)
       SLASH -> Just Slash
       _ -> Nothing
 
-
--- this is similar to chainl in `Text.Parsec` but works on `BinOp`
--- adopted from https://jakewheat.github.io/intro_to_parsing/
-leftChain :: Parser Expr -> Parser BinOp -> Parser Expr
-leftChain p op = do
-  expr <- p
-  maybeAddSuffix expr
-  where
-    addSuffix e0 = do
-      op' <- op
-      e1 <- p
-      maybeAddSuffix (Binary e0 op' e1)
-
-    maybeAddSuffix e = addSuffix e <|> return e
-
 term :: Parser Expr
 term = leftChain factor (satisfyT f)
   where
