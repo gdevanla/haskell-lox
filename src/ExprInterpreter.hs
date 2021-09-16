@@ -43,6 +43,7 @@ applyCompOpToDouble x y bop _ = Left value
 interpret :: Expr -> Either T.Text LoxValue
 interpret (Number x) = Right $ LoxValueDouble x
 interpret (Literal t) = Right $ LoxValueString t
+interpret (LoxBool t) = Right $ LoxValueBool t
 interpret LoxNil    = Right LoxValueNil
 interpret (Paren expr) = interpret expr
 interpret (Unary op expr) = let
