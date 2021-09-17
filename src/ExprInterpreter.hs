@@ -65,7 +65,11 @@ interpret (Literal t) = lift $ return $ LoxValueString t
 interpret (LoxBool t) = lift $ return $ LoxValueBool t
 interpret LoxNil    = lift $ return LoxValueNil
 interpret (Paren expr) = interpret expr
-interpret (Identifier i) = lift $ return $ LoxValueIdentifier i
+interpret (Identifier i) = do
+  s <- get
+  case M.lookup i s of
+    Just v -> lift . return $ v
+    Nothing -> ExceptT . return . Left $ "Unknown var: " <> i
 interpret (Unary op expr) = do
   value <- interpret expr
   case op of
