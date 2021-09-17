@@ -100,7 +100,8 @@ interpret (Identifier i) = do
     Just v -> lift . return $ v
     Nothing -> ExceptT . return . Left $ "Unknown var: " <> i
 interpret (Unary op expr) = do
-  value <- interpret expr
+  value' <- interpret expr
+  value <- unpackIdent value'
   case op of
     UnaryMinus -> case value of
       (LoxValueDouble d) -> lift $ return $ LoxValueDouble (-d)
