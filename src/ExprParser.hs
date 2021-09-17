@@ -38,10 +38,6 @@ data BinOp = NotEqual | EqualEqual | Gt | Gte | Lt | Lte | Plus | Minus | Star |
 
 data UnaryOp = UnaryMinus | UnaryBang deriving (Show, Eq)
 
-type Program = [Statement]
-
-data Statement = StmtExpr Expr | StmtPrint Expr deriving (Show, Eq)
-
 data Expr
   = Number Double
   | Literal T.Text
@@ -175,28 +171,6 @@ equality = leftChain comparison (satisfyT f)
 
 loxExpr :: Parser Expr
 loxExpr = equality
-
-semi :: Parser ()
-semi = satisfyT f
-  where
-    f x = case tokinfo_type x of
-      SEMICOLON -> Just ()
-      _ -> Nothing
-
-loxPrintStmt :: Parser Expr
-loxPrintStmt = do
-  void $ satisfyT f
-  loxExpr
-  where
-    f x = case tokinfo_type x of
-      PRINT -> Just ()
-      _ -> Nothing
-
-loxStatement :: Parser Statement
-loxStatement = try (StmtExpr <$> loxExpr) <|> StmtPrint <$> loxPrintStmt
-
-loxProgram :: Parser Program
-loxProgram = endBy1 loxStatement semi
 
 scannerLoxTokens :: [LoxTokInfo] -> LoxParserResult
 scannerLoxTokens = parse loxExpr ""
