@@ -29,6 +29,7 @@ test_expr = [
   test_interpreter "nil" $ Right LoxValueNil,
   test_interpreter "(1+2)/2;" $ Right (LoxValueDouble 1.5),
   test_interpreter "(1>5)==(6<9);" $ Right (LoxValueBool False),
+  test_interpreter "a;" $ Right (LoxValueIdentifier "a"),
   test_errors "1>\"test\"",
   test_errors "1>5>6;"
   ]
