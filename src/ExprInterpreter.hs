@@ -5,8 +5,6 @@ module ExprInterpreter where
 import System.IO
 import Data.Text as T
 import Import hiding (many, try, (<|>))
-import Scanner
-import Text.Parsec hiding (State)
 
 import ExprParser
 import Control.Monad.Except
@@ -32,6 +30,38 @@ showLoxValue LoxValueNil = "nil"
 showLoxValue (LoxValueBool b) = show b
 showLoxValue (LoxValueIdentifier b) = show b
 
+-- unpackIdentifier :: LoxValue -> LoxValue -> ExceptT T.Text (State Env) (LoxValue, LoxValue)
+-- unpackIdentifier (LoxValueIdentifier x) (LoxValueIdentifier y) = do
+--   s <- get
+--   let v1 = M.lookup x s
+--   let v2 = M.lookup y s
+--   case (v1, v2) of
+--     (Just v1', Just v2') -> lift . return $ (v1', v2')
+--     (_, Nothing) -> ExceptT . return $ Left $ "Unknown var" <> y
+--     (Nothing, _) -> ExceptT . return $ Left $ "Unknown var" <> x
+-- unpackIdentifier (LoxValueIdentifier x) y = do
+--   s <- get
+--   let v1 = M.lookup x s
+--   case v1 of
+--     Just v' -> lift . return $ (v', y)
+--     Nothing -> ExceptT . return $ Left $ "Unknown var" <> x
+-- unpackIdentifier x (LoxValueIdentifier y) = do
+--   s <- get
+--   let v1 = M.lookup y s
+--   case v1 of
+--     Just v' -> lift . return $ (x, v')
+--     Nothing -> ExceptT . return $ Left $ "Unknown var" <> y
+-- unpackIdentifier x y = lift . return $ (x, y)
+
+unpackIdent :: LoxValue -> InterpreterT
+unpackIdent (LoxValueIdentifier x) = do
+  s <- get
+  let v1 = M.lookup x s
+  case v1 of
+    Just v' -> lift . return $ v'
+    Nothing -> ExceptT . return $ Left $ "Unknown var" <> x
+unpackIdent x = lift . return $ x
+
 applyOpToDouble :: LoxValue -> LoxValue -> BinOp -> (Double -> Double -> Double) -> InterpreterT
 applyOpToDouble (LoxValueDouble x) (LoxValueDouble y) bop op = lift . return $ LoxValueDouble $ op x y
 applyOpToDouble x y bop _ = ExceptT . return $ Left value
@@ -44,7 +74,6 @@ applyOpToDouble x y bop _ = ExceptT . return $ Left value
           ++ show x
           ++ " and "
           ++ show y
-
 applyCompOpToDouble :: LoxValue -> LoxValue -> BinOp -> (Double -> Double -> Bool) -> InterpreterT
 applyCompOpToDouble (LoxValueDouble x) (LoxValueDouble y) bop op = lift . return $ LoxValueBool $ op x y
 applyCompOpToDouble x y bop _ = ExceptT . return $ Left value
@@ -83,8 +112,10 @@ interpret (Unary op expr) = do
   lift . return $ value
 
 interpret (Binary expr1 op expr2) = do
-  right_expr <- interpret expr1
-  left_expr <- interpret expr2
+  right_expr' <- interpret expr1
+  right_expr <- unpackIdent right_expr'
+  left_expr' <- interpret expr2
+  left_expr <- unpackIdent left_expr'
   case op of
     -- arith operations
     Minus -> applyOpToDouble right_expr left_expr Minus (-)
@@ -135,12 +166,12 @@ interpretDeclaration (DeclVar (Decl var Nothing)) s = do
 
 interpretDeclaration (DeclStatement stmt) s = interpretStmt stmt s
 
-interpretProgram :: Program -> Env -> IO ()
+interpretProgram :: Program -> Env -> IO Env
 interpretProgram (decl : decls) s = go
   where
-    go  = do
+    go = do
       s' <- interpretDeclaration decl s
-      print $ show s'
-      interpretProgram decls s'
-      return ()
-interpretProgram [] _ = return ()
+      -- print $ show s'
+      s'' <- interpretProgram decls s'
+      return s''
+interpretProgram [] env = return env

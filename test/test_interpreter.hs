@@ -20,6 +20,18 @@ test_interpreter input expected = testCase input $ do
   let (result, _) = runState (runExceptT (interpret $ fromRight LoxNil x)) M.empty
   expected @=? result
 
+-- with this function we add back the final result of the script into the env and test the value of tat variable
+test_program input lookup_key expected = testCase input $ do
+  --let result = either (const LoxValueNil) $
+  let x = fromRight [] $ P.parse loxProgram  "" $ fromRight [] (scanner input)
+  env <- interpretProgram  x M.empty
+  -- print $ show env
+  let result = M.lookup lookup_key env
+  case result of
+    Just x' -> expected @=? x'
+    Nothing -> assertFailure $ show env
+
+
 test_errors input = testCase input $ do
   --let result = either (const LoxValueNil) $
   let x = P.parse equality "" $ fromRight [] (scanner input)
@@ -34,10 +46,17 @@ test_expr = [
   test_interpreter "nil" $ Right LoxValueNil,
   test_interpreter "(1+2)/2;" $ Right (LoxValueDouble 1.5),
   test_interpreter "(1>5)==(6<9);" $ Right (LoxValueBool False),
-  test_interpreter "a;" $ Right (LoxValueIdentifier "a"),
+  test_interpreter "a;" $ Left "Unknown var: a",
+  test_interpreter "var a;" $ Right LoxValueNil,
   test_errors "1>\"test\"",
-  test_errors "1>5>6;"
+  test_errors "1>5>6;",
+  test_program "var a=10;var b=100;var c=a+b;print c;var result=c;" "result" (LoxValueDouble 110.0)
+  -- test_program "var a=10;z=a+100;" $ Right (LoxValueDouble 110.0),
+  -- test_program "var b=10;100+b;" $ Right (LoxValueDouble 110.0),
+  -- test_program "var b=\"test\";b+\"append\";" $ Right (LoxValueDouble 110.0)
   ]
+
+
 
 
 main = do

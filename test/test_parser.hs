@@ -29,7 +29,7 @@ test_exprs = [
 
 test_statement input expected =  testCase input $ do
   let lexer = scanner input
-  putStr $ show lexer
+  -- putStr $ show lexer
   let result = P.parse loxProgram "" $ fromRight [] lexer
   expected @=? result
 
