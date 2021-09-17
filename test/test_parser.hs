@@ -35,8 +35,17 @@ test_statement input expected =  testCase input $ do
 
 
 test_statements = [
-  test_statement "true;false;1+2;print 100;" $
-    Right [StmtExpr (LoxBool True),StmtExpr (LoxBool False),StmtExpr (Binary (Number 1.0) Plus (Number 2.0)),StmtPrint (Number 100.0)]
+  test_statement "true;false;1+2;print 100;var x=10;" $
+    Right [DeclStatement $ StmtExpr (LoxBool True),
+           DeclStatement $ StmtExpr (LoxBool False),
+           DeclStatement $ StmtExpr (Binary (Number 1.0) Plus (Number 2.0)),
+           DeclStatement $ StmtPrint (Number 100.0),
+           DeclVar $ Decl "x" (Just $ Number 10.0)
+           ],
+  test_statement "var x=10;" $ Right [DeclVar (Decl "x" (Just (Number 10.0)))],
+  test_statement "var x;var y = 10; var z=\"value of z\";" $
+    Right [DeclVar (Decl "x" Nothing), DeclVar (Decl "y" (Just (Number 10.0))), DeclVar (Decl "z" (Just (Literal "value of z")))]
+
   ]
 
 test_parsers = test_exprs ++ test_statements

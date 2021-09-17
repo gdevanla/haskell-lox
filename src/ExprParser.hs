@@ -38,7 +38,11 @@ data BinOp = NotEqual | EqualEqual | Gt | Gte | Lt | Lte | Plus | Minus | Star |
 
 data UnaryOp = UnaryMinus | UnaryBang deriving (Show, Eq)
 
-type Program = [Statement]
+type Program = [Declaration]
+
+data Declaration = DeclVar Decl | DeclStatement Statement deriving (Show, Eq)
+
+data Decl = Decl T.Text (Maybe Expr)  deriving (Show, Eq)
 
 data Statement = StmtExpr Expr | StmtPrint Expr deriving (Show, Eq)
 
@@ -193,10 +197,41 @@ loxPrintStmt = do
       _ -> Nothing
 
 loxStatement :: Parser Statement
-loxStatement = try (StmtExpr <$> loxExpr) <|> StmtPrint <$> loxPrintStmt
+loxStatement = StmtExpr <$> try loxExpr <|> StmtPrint <$> loxPrintStmt
+
+loxDeclStatment :: Parser Declaration
+loxDeclStatment = DeclStatement <$> loxStatement
+
+loxAssignment :: Parser Expr
+loxAssignment = do
+  satisfyT f
+  loxExpr
+  where
+    f x = case tokinfo_type x of
+      EQUAL -> Just ()
+      _ -> Nothing
+
+loxDeclaration :: Parser Declaration
+loxDeclaration = do
+  void $ satisfyT f
+  var_name <- satisfyT fi
+  expr <- optionMaybe loxAssignment
+  return $ DeclVar $ Decl var_name expr
+  where
+    f x = case tokinfo_type x of
+      VAR -> Just ()
+      _ -> Nothing
+
+    fi x = case tokinfo_type x of
+      IDENTIFIER ix -> Just (T.pack ix)
+      _ -> Nothing
+
+
+loxDeclarations :: Parser Declaration
+loxDeclarations = try loxDeclaration  <|> DeclStatement <$> loxStatement
 
 loxProgram :: Parser Program
-loxProgram = endBy1 loxStatement semi
+loxProgram = endBy1 loxDeclarations semi
 
 scannerLoxTokens :: [LoxTokInfo] -> LoxParserResult
 scannerLoxTokens = parse loxExpr ""
