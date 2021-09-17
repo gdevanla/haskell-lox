@@ -2,7 +2,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module ExprInterpreter where
-
+import System.IO
 import Data.Text as T
 import Import hiding (many, try, (<|>))
 import Scanner
@@ -12,6 +12,12 @@ import ExprParser
 
 data LoxValue = LoxValueString T.Text | LoxValueDouble Double | LoxValueNil | LoxValueBool Bool
   deriving (Show, Eq)
+
+showLoxValue :: LoxValue -> String
+showLoxValue (LoxValueString t) = show t
+showLoxValue (LoxValueDouble t) = show t
+showLoxValue LoxValueNil = "nil"
+showLoxValue (LoxValueBool b) = show b
 
 applyOpToDouble :: LoxValue -> LoxValue -> BinOp -> (Double -> Double -> Double) -> Either T.Text LoxValue
 applyOpToDouble (LoxValueDouble x) (LoxValueDouble y) bop op = Right $ LoxValueDouble $ op x y
@@ -80,3 +86,13 @@ interpret (Binary expr1 op expr2) = do
       (LoxValueString x, LoxValueString y) -> Right $ LoxValueString $ x <> y
       (LoxValueDouble x, LoxValueDouble y) -> Right $ LoxValueDouble $ x + y
       (x, y) -> Left $ T.pack $ "Unsupported operation (+) on "  ++ show x ++ " and " ++ show y
+
+interpretStmt :: Statement -> IO ()
+interpretStmt (StmtExpr expr) = return ()  -- will be filled in when we maintain state
+interpretStmt (StmtPrint expr) = do
+  case interpret expr of
+    Right x -> putStrLn $ showLoxValue x
+    Left x -> print $ "Unexpected error" <> x
+
+interpretProgram :: [Statement] -> IO ()
+interpretProgram = mapM_ interpretStmt
