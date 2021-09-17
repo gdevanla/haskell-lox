@@ -6,9 +6,12 @@ import System.IO
 import Data.Text as T
 import Import hiding (many, try, (<|>))
 import Scanner
-import Text.Parsec
+import Text.Parsec hiding (State)
 
 import ExprParser
+import Control.Monad.Except
+import Data.Map as M
+import Control.Monad.State.Strict
 
 -- https://www.seas.upenn.edu/~cis552/13fa/lectures/FunEnv.html
 data LoxValue
@@ -19,6 +22,9 @@ data LoxValue
   | LoxValueIdentifier T.Text
   deriving (Show, Eq)
 
+type Env = M.Map T.Text LoxValue
+type InterpreterT = ExceptT T.Text (State Env) LoxValue
+
 showLoxValue :: LoxValue -> String
 showLoxValue (LoxValueString t) = show t
 showLoxValue (LoxValueDouble t) = show t
@@ -26,9 +32,9 @@ showLoxValue LoxValueNil = "nil"
 showLoxValue (LoxValueBool b) = show b
 showLoxValue (LoxValueIdentifier b) = show b
 
-applyOpToDouble :: LoxValue -> LoxValue -> BinOp -> (Double -> Double -> Double) -> Either T.Text LoxValue
-applyOpToDouble (LoxValueDouble x) (LoxValueDouble y) bop op = Right $ LoxValueDouble $ op x y
-applyOpToDouble x y bop _ = Left value
+applyOpToDouble :: LoxValue -> LoxValue -> BinOp -> (Double -> Double -> Double) -> InterpreterT
+applyOpToDouble (LoxValueDouble x) (LoxValueDouble y) bop op = lift . return $ LoxValueDouble $ op x y
+applyOpToDouble x y bop _ = ExceptT . return $ Left value
   where
     value =
       T.pack $
@@ -39,9 +45,9 @@ applyOpToDouble x y bop _ = Left value
           ++ " and "
           ++ show y
 
-applyCompOpToDouble :: LoxValue -> LoxValue -> BinOp -> (Double -> Double -> Bool) -> Either T.Text LoxValue
-applyCompOpToDouble (LoxValueDouble x) (LoxValueDouble y) bop op = Right $ LoxValueBool $ op x y
-applyCompOpToDouble x y bop _ = Left value
+applyCompOpToDouble :: LoxValue -> LoxValue -> BinOp -> (Double -> Double -> Bool) -> InterpreterT
+applyCompOpToDouble (LoxValueDouble x) (LoxValueDouble y) bop op = lift . return $ LoxValueBool $ op x y
+applyCompOpToDouble x y bop _ = ExceptT . return $ Left value
   where
     value =
       T.pack $
@@ -53,27 +59,25 @@ applyCompOpToDouble x y bop _ = Left value
           ++ show y
 
 
-interpret :: Expr -> Either T.Text LoxValue
-interpret (Number x) = Right $ LoxValueDouble x
-interpret (Literal t) = Right $ LoxValueString t
-interpret (LoxBool t) = Right $ LoxValueBool t
-interpret LoxNil    = Right LoxValueNil
+interpret :: Expr -> InterpreterT
+interpret (Number x) = lift $ return $ LoxValueDouble x
+interpret (Literal t) = lift $ return $ LoxValueString t
+interpret (LoxBool t) = lift $ return $ LoxValueBool t
+interpret LoxNil    = lift $ return LoxValueNil
 interpret (Paren expr) = interpret expr
-interpret (Identifier i) = Right $ LoxValueIdentifier i
-interpret (Unary op expr) = let
-  value = interpret expr
-  result = case op of
+interpret (Identifier i) = lift $ return $ LoxValueIdentifier i
+interpret (Unary op expr) = do
+  value <- interpret expr
+  case op of
     UnaryMinus -> case value of
-      Right (LoxValueDouble d) -> Right $ LoxValueDouble (-d)
-      Right d -> Left (T.pack ("Unexpected type" ++ show d))
-      x -> x
+      (LoxValueDouble d) -> lift $ return $ LoxValueDouble (-d)
+      d -> ExceptT . return . Left $ T.pack ("Unexpected type" ++ show d)
     UnaryBang -> case value of
-      Right LoxValueNil -> Right $ LoxValueBool True
-      Right (LoxValueBool b) -> Right $ LoxValueBool (not b)
-      Right _ -> Right $ LoxValueBool True
-      _ -> value
-  in
-  result
+      LoxValueNil -> lift . return $ LoxValueBool True
+      LoxValueBool b -> lift .return $ LoxValueBool (not b)
+      _ ->  lift . return $ LoxValueBool True
+  lift . return $ value
+
 interpret (Binary expr1 op expr2) = do
   right_expr <- interpret expr1
   left_expr <- interpret expr2
@@ -87,20 +91,35 @@ interpret (Binary expr1 op expr2) = do
     Gte -> applyCompOpToDouble right_expr left_expr Gt (>=)
     Lt -> applyCompOpToDouble right_expr left_expr Gt (<)
     Lte -> applyCompOpToDouble right_expr left_expr Gt (<=)
-    NotEqual -> Right $ LoxValueBool $ right_expr /= left_expr
-    EqualEqual -> Right $ LoxValueBool $ right_expr == left_expr
+    NotEqual -> lift . return $ LoxValueBool $ right_expr /= left_expr
+    EqualEqual -> lift .return $ LoxValueBool $ right_expr == left_expr
     -- special case of Plus
     Plus -> case (right_expr, left_expr) of
-      (LoxValueString x, LoxValueString y) -> Right $ LoxValueString $ x <> y
-      (LoxValueDouble x, LoxValueDouble y) -> Right $ LoxValueDouble $ x + y
-      (x, y) -> Left $ T.pack $ "Unsupported operation (+) on "  ++ show x ++ " and " ++ show y
+      (LoxValueString x, LoxValueString y) -> lift .return $ LoxValueString $ x <> y
+      (LoxValueDouble x, LoxValueDouble y) -> lift . return $ LoxValueDouble $ x + y
+      (x, y) -> ExceptT . return . Left $ T.pack $ "Unsupported operation (+) on "  ++ show x ++ " and " ++ show y
 
-interpretStmt :: Statement -> IO ()
-interpretStmt (StmtExpr expr) = return ()  -- will be filled in when we maintain state
-interpretStmt (StmtPrint expr) = do
-  case interpret expr of
+interpretStmt :: Statement -> Env -> IO Env
+interpretStmt (StmtExpr expr) s = do
+  let (_, s') = runState (runExceptT (interpret expr)) s
+  return s'
+interpretStmt (StmtPrint expr) s = do
+  let (result, s') = runState (runExceptT (interpret expr)) s
+  case result of
     Right x -> putStrLn $ showLoxValue x
     Left x -> print $ "Unexpected error" <> x
+  return s'
 
-interpretProgram :: [Statement] -> IO ()
-interpretProgram = mapM_ interpretStmt
+interpretProgram :: [Statement] -> Env -> IO ()
+interpretProgram (stmt : stmts) s = go stmt s
+  where
+    go st s' = do
+      s'' <- interpretStmt st s'
+      interpretProgram stmts s''
+      return ()
+interpretProgram [] _ = return ()
+
+
+-- data Declaration = DeclVar Decl | DeclStatement Statement deriving (Show, Eq)
+-- data Decl = Decl T.Text (Maybe Expr) deriving (Show, Eq)
+-- data Statement = StmtExpr Expr | StmtPrint Expr deriving (Show, Eq)

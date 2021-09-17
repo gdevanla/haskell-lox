@@ -8,17 +8,22 @@ import ExprParser
 import ExprInterpreter
 
 import Text.Parsec as P
+import Control.Monad.Except
+import Control.Monad.State.Strict
+import Data.Map as M
+
 
 test_interpreter input expected = testCase input $ do
   --let result = either (const LoxValueNil) $
   let x = P.parse equality "" $ fromRight [] (scanner input)
-  let result = interpret $ fromRight LoxNil x
+  -- let result = interpret $ fromRight LoxNil x
+  let (result, _) = runState (runExceptT (interpret $ fromRight LoxNil x)) M.empty
   expected @=? result
 
 test_errors input = testCase input $ do
   --let result = either (const LoxValueNil) $
   let x = P.parse equality "" $ fromRight [] (scanner input)
-  let result = interpret $ fromRight LoxNil x
+  let (result, _) = runState (runExceptT (interpret $ fromRight LoxNil x)) M.empty
   assertBool input (isLeft result)
 
 test_expr = [
