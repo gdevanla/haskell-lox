@@ -101,8 +101,13 @@ interpret (Binary expr1 op expr2) = do
 
 interpretStmt :: Statement -> Env -> IO Env
 interpretStmt (StmtExpr expr) s = do
-  let (_, s') = runState (runExceptT (interpret expr)) s
-  return s'
+  let (result, s') = runState (runExceptT (interpret expr)) s
+  case result of
+    Right _ -> return s'
+    Left e -> do
+      print e
+      return s'
+
 interpretStmt (StmtPrint expr) s = do
   let (result, s') = runState (runExceptT (interpret expr)) s
   case result of
