@@ -110,8 +110,20 @@ interpretStmt (StmtPrint expr) s = do
     Left x -> print $ "Unexpected error" <> x
   return s'
 
+interpretDeclaration :: Declaration -> Env -> IO Env
+interpretDeclaration (DeclVar (Decl var (Just expr))) s = do
+  let (result, s') = runState (runExceptT (interpret expr)) s
+  case result of
+        Right r -> do
+          print $ "setting value of " <> var <> " to " <> T.pack (show r)
+          return $ M.insert var r s'
+        _ -> do
+          print $ "Error during declaration of" <> var
+          return s'
 
-interpretDeclaration (DeclVar decl) s = return M.empty
+interpretDeclaration (DeclVar (Decl var Nothing)) s = do
+  return $ M.insert var LoxValueNil s
+
 interpretDeclaration (DeclStatement stmt) s = interpretStmt stmt s
 
 interpretProgram :: Program -> Env -> IO ()
@@ -119,6 +131,7 @@ interpretProgram (decl : decls) s = go
   where
     go  = do
       s' <- interpretDeclaration decl s
+      print $ show s'
       interpretProgram decls s'
       return ()
 interpretProgram [] _ = return ()
