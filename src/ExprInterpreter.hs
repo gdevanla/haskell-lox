@@ -110,16 +110,15 @@ interpretStmt (StmtPrint expr) s = do
     Left x -> print $ "Unexpected error" <> x
   return s'
 
-interpretProgram :: [Statement] -> Env -> IO ()
-interpretProgram (stmt : stmts) s = go stmt s
+
+interpretDeclaration (DeclVar decl) s = return M.empty
+interpretDeclaration (DeclStatement stmt) s = interpretStmt stmt s
+
+interpretProgram :: Program -> Env -> IO ()
+interpretProgram (decl : decls) s = go
   where
-    go st s' = do
-      s'' <- interpretStmt st s'
-      interpretProgram stmts s''
+    go  = do
+      s' <- interpretDeclaration decl s
+      interpretProgram decls s'
       return ()
 interpretProgram [] _ = return ()
-
-
--- data Declaration = DeclVar Decl | DeclStatement Statement deriving (Show, Eq)
--- data Decl = Decl T.Text (Maybe Expr) deriving (Show, Eq)
--- data Statement = StmtExpr Expr | StmtPrint Expr deriving (Show, Eq)
