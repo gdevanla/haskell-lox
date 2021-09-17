@@ -211,7 +211,7 @@ var = do
 checkIfIdentifier :: Parser LoxTokInfo
 checkIfIdentifier = do
   source_pos <- getPosition
-  s <- var
+  s <- var <* whitespace
   result ([(x, y) | (x, y) <- keywordMapping, y == s]) s source_pos
   where
     result xs s source_pos = do
