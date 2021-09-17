@@ -10,7 +10,13 @@ import Text.Parsec
 
 import ExprParser
 
-data LoxValue = LoxValueString T.Text | LoxValueDouble Double | LoxValueNil | LoxValueBool Bool
+-- https://www.seas.upenn.edu/~cis552/13fa/lectures/FunEnv.html
+data LoxValue
+  = LoxValueString T.Text
+  | LoxValueDouble Double
+  | LoxValueNil
+  | LoxValueBool Bool
+  | LoxValueIdentifier T.Text
   deriving (Show, Eq)
 
 showLoxValue :: LoxValue -> String
@@ -18,7 +24,7 @@ showLoxValue (LoxValueString t) = show t
 showLoxValue (LoxValueDouble t) = show t
 showLoxValue LoxValueNil = "nil"
 showLoxValue (LoxValueBool b) = show b
--- showLoxValue (LoxValueIdentifier b) = show b
+showLoxValue (LoxValueIdentifier b) = show b
 
 applyOpToDouble :: LoxValue -> LoxValue -> BinOp -> (Double -> Double -> Double) -> Either T.Text LoxValue
 applyOpToDouble (LoxValueDouble x) (LoxValueDouble y) bop op = Right $ LoxValueDouble $ op x y
@@ -53,6 +59,7 @@ interpret (Literal t) = Right $ LoxValueString t
 interpret (LoxBool t) = Right $ LoxValueBool t
 interpret LoxNil    = Right LoxValueNil
 interpret (Paren expr) = interpret expr
+interpret (Identifier i) = Right $ LoxValueIdentifier i
 interpret (Unary op expr) = let
   value = interpret expr
   result = case op of
