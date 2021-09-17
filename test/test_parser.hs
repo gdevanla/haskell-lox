@@ -44,8 +44,9 @@ test_statements = [
            ],
   test_statement "var x=10;" $ Right [DeclVar (Decl "x" (Just (Number 10.0)))],
   test_statement "var x;var y = 10; var z=\"value of z\";" $
-    Right [DeclVar (Decl "x" Nothing), DeclVar (Decl "y" (Just (Number 10.0))), DeclVar (Decl "z" (Just (Literal "value of z")))]
-
+    Right [DeclVar (Decl "x" Nothing), DeclVar (Decl "y" (Just (Number 10.0))), DeclVar (Decl "z" (Just (Literal "value of z")))],
+  test_statement "var x;x;" $
+    Right [DeclVar (Decl "x" Nothing), DeclStatement (StmtExpr (Identifier "x"))]
   ]
 
 test_parsers = test_exprs ++ test_statements

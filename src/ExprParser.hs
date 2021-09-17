@@ -49,6 +49,7 @@ data Statement = StmtExpr Expr | StmtPrint Expr deriving (Show, Eq)
 data Expr
   = Number Double
   | Literal T.Text
+  | Identifier T.Text
   | LoxBool Bool
   | LoxNil
   | Paren Expr
@@ -101,6 +102,11 @@ literal = satisfyT f
     f (LoxTokInfo (STRING x) _ _ _) = Just (Literal $ T.pack x)
     f _ = Nothing
 
+loxIdentifier :: Parser Expr
+loxIdentifier = satisfyT f
+  where
+    f (LoxTokInfo (IDENTIFIER x) _ _ _) = Just (Identifier $ T.pack x)
+    f _ = Nothing
 
 loxBool :: Parser Expr
 loxBool = satisfyT f
@@ -128,7 +134,7 @@ loxParenExpr = do
     parenClose _ = Nothing
 
 loxPrimary :: Parser Expr
-loxPrimary = number <|> literal <|> loxBool <|> loxNil <|> loxParenExpr
+loxPrimary = number <|> literal <|> loxBool <|> loxNil <|> loxParenExpr <|> loxIdentifier
 
 unary' :: Parser Expr
 unary' = Unary <$> satisfyT f <*> unary

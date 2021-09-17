@@ -18,6 +18,7 @@ showLoxValue (LoxValueString t) = show t
 showLoxValue (LoxValueDouble t) = show t
 showLoxValue LoxValueNil = "nil"
 showLoxValue (LoxValueBool b) = show b
+-- showLoxValue (LoxValueIdentifier b) = show b
 
 applyOpToDouble :: LoxValue -> LoxValue -> BinOp -> (Double -> Double -> Double) -> Either T.Text LoxValue
 applyOpToDouble (LoxValueDouble x) (LoxValueDouble y) bop op = Right $ LoxValueDouble $ op x y
