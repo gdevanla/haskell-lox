@@ -9,7 +9,7 @@ import Import hiding (many, try, (<|>))
 
 import ExprParser
 import Control.Monad.Except
-import Data.Map as M
+import Data.Map.Strict as M
 import Control.Monad.State.Strict
 
 -- https://www.seas.upenn.edu/~cis552/13fa/lectures/FunEnv.html

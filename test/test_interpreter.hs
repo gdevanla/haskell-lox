@@ -10,7 +10,7 @@ import ExprInterpreter
 import Text.Parsec as P
 import Control.Monad.Except
 import Control.Monad.State.Strict
-import Data.Map as M
+import Data.Maybe
 
 
 test_interpreter input expected = testCase input $ do
@@ -46,7 +46,37 @@ test_errors input = testCase input $ do
   let (result, _) = runState (runExceptT (interpret $ fromRight LoxNil x)) (initEnv Nothing)
   assertBool input (isLeft result)
 
-test_expr = [
+
+test_env = testCase "test_env"  $ do
+  let root_env'' = insertEnv "a" (LoxValueDouble 1.0) (initEnv Nothing)
+  let root_env' = insertEnv "z" (LoxValueDouble 100.0) root_env''
+  let root_env = insertEnv "w" (LoxValueDouble 200.0) root_env'
+  let child_env = insertEnv "a" (LoxValueDouble 2.0) (initEnv (Just root_env))
+  let child_env' = insertEnv "b" (LoxValueDouble 3.0) child_env
+
+  let grand_child = insertEnv "d" (LoxValueDouble 4.0) (initEnv (Just child_env'))
+  let grand_child' = insertEnv "a" (LoxValueDouble 5.0) grand_child
+
+  Just (LoxValueDouble 1.0) @=? lookupEnv "a" root_env
+  Just (LoxValueDouble 2.0) @=? lookupEnv "a" child_env'
+  Just (LoxValueDouble 3.0) @=? lookupEnv "b" child_env'
+  Just (LoxValueDouble 4.0) @=? lookupEnv "d" grand_child'
+  Just (LoxValueDouble 5.0) @=? lookupEnv "a" grand_child'
+  Just (LoxValueDouble 3.0) @=? lookupEnv "b" grand_child'
+
+  let grand_child'' = fromJust $ updateEnv "z" (LoxValueBool True) grand_child'
+
+  Just (LoxValueDouble 5.0) @=? lookupEnv "a" grand_child''
+  Just (LoxValueDouble 3.0) @=? lookupEnv "b" grand_child''
+  Just (LoxValueDouble 4.0) @=? lookupEnv "d" grand_child''
+  Just (LoxValueDouble 5.0) @=? lookupEnv "a" grand_child''
+  Just (LoxValueBool True) @=? lookupEnv "z" grand_child''
+
+
+
+  return ()
+
+test_interpreters = [
   test_interpreter "1>5;" $ Right (LoxValueBool False),
   test_interpreter "1+1;" $ Right (LoxValueDouble 2),
   test_interpreter "\"test\";" $ Right (LoxValueString "test"),
@@ -63,12 +93,15 @@ test_expr = [
   test_program "var a=-1;var b=-a;var c=a+b;print c;var result=a>b;" "result" (LoxValueBool False),
   test_program "var a=-1;var b=-a;var c=a+b;print c;var result=!(a>b);" "result" (LoxValueBool True),
   test_program "var x;var a;var b;var c;a=b = c= 10;x=a+b+c;" "x" (LoxValueDouble 30.0),
-  test_program_error "a=b = c= 10;x=a+b+c;" "Assignment to variable before declaration c"
+  test_program_error "a=b = c= 10;x=a+b+c;" "Assignment to variable before declaration c",
+
+  -- test env
+    test_env
   ]
 
 
 
 
 main = do
-  defaultMain $ testGroup "test_interpreter" test_expr
+  defaultMain $ testGroup "test_interpreter" test_interpreters
   --defaultMain tests
