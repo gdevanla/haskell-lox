@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module ExprInterpreter where
 import System.IO
@@ -20,7 +21,36 @@ data LoxValue
   | LoxValueIdentifier T.Text
   deriving (Show, Eq)
 
-type Env = M.Map T.Text LoxValue
+-- type Env = M.Map T.Text LoxValue
+
+data Env = Env {
+               env :: M.Map T.Text LoxValue,
+               parent :: Maybe Env
+               } deriving (Show, Eq)
+
+initEnv parent = Env {env=M.empty, parent=parent}
+
+lookupEnv :: T.Text -> Env -> Maybe LoxValue
+lookupEnv k environ = go (Just environ)
+  where
+    go (Just Env{..}) = case M.lookup k env of
+                           Just v -> Just v
+                           Nothing -> go parent
+    go Nothing = Nothing
+
+updateEnv :: T.Text -> LoxValue -> Env -> Maybe Env
+updateEnv k v s = go (Just s)
+  where
+    go (Just s'@Env{..}) = case M.lookup k env of
+      Just _ -> Just s'{env=M.update (\_ -> Just v) k env}
+      Nothing -> do
+        parent_state <- go parent
+        return $ s'{parent=Just parent_state}
+    go Nothing = Nothing
+
+insertEnv :: T.Text -> LoxValue -> Env -> Env
+insertEnv k v s@Env {..} = s {env = M.insert k v env}
+
 type InterpreterT = ExceptT T.Text (State Env) LoxValue
 
 showLoxValue :: LoxValue -> String
@@ -56,7 +86,7 @@ showLoxValue (LoxValueIdentifier b) = show b
 unpackIdent :: LoxValue -> InterpreterT
 unpackIdent (LoxValueIdentifier x) = do
   s <- get
-  let v1 = M.lookup x s
+  let v1 = lookupEnv x s
   case v1 of
     Just v' -> lift . return $ v'
     Nothing -> ExceptT . return $ Left $ "Unknown var" <> x
@@ -96,7 +126,7 @@ interpret LoxNil    = lift $ return LoxValueNil
 interpret (Paren expr) = interpret expr
 interpret (Identifier i) = do
   s <- get
-  case M.lookup i s of
+  case lookupEnv i s of
     Just v -> lift . return $ v
     Nothing -> ExceptT . return . Left $ "Unknown var: " <> i
 interpret (Unary op expr) = do
@@ -136,13 +166,13 @@ interpret (Binary expr1 op expr2) = do
       (x, y) -> ExceptT . return . Left $ T.pack $ "Unsupported operation (+) on "  ++ show x ++ " and " ++ show y
 interpret (Assignment lhs rhs) = do
   s <- get
-  if M.member lhs s then
-    do
-      expr <- interpret rhs
-      s' <- get  -- need to get an s after all rhs are processed
-      put $ M.update (\_ -> Just expr) lhs s'
-      lift . return  $ expr
-  else ExceptT . return . Left $ "Assignment to variable before declaration " <> lhs
+  lox_value <- interpret rhs
+  s' <- get  -- need to get an s after all rhs are processed
+  case updateEnv lhs lox_value s' of
+    Just s'' -> do
+      put $ s''
+      lift . return  $ lox_value
+    Nothing -> ExceptT . return . Left $ "Assignment to variable before declaration " <> lhs
 
 
 interpretStmt :: Statement -> Env -> IO (Env, Maybe T.Text)
@@ -171,14 +201,14 @@ interpretDeclaration (DeclVar (Decl var (Just expr))) s = do
   case result of
         Right r -> do
           print $ "setting value of " <> var <> " to " <> T.pack (show r)
-          return $ (M.insert var r s', Nothing)
+          return $ (insertEnv var r s', Nothing)
         _ -> do
           let msg = "Error during declaration of" <> var
           print msg
           return (s', Just msg)
 
 interpretDeclaration (DeclVar (Decl var Nothing)) s = do
-  return (M.insert var LoxValueNil s, Nothing)
+  return (insertEnv var LoxValueNil s, Nothing)
 
 interpretDeclaration (DeclStatement stmt) s = interpretStmt stmt s
 

@@ -17,16 +17,16 @@ test_interpreter input expected = testCase input $ do
   --let result = either (const LoxValueNil) $
   let x = P.parse equality "" $ fromRight [] (scanner input)
   -- let result = interpret $ fromRight LoxNil x
-  let (result, _) = runState (runExceptT (interpret $ fromRight LoxNil x)) M.empty
+  let (result, _) = runState (runExceptT (interpret $ fromRight LoxNil x)) (initEnv Nothing)
   expected @=? result
 
 -- with this function we add back the final result of the script into the env and test the value of tat variable
 test_program input lookup_key expected = testCase input $ do
   --let result = either (const LoxValueNil) $
   let x = fromRight [] $ P.parse loxProgram "" $ fromRight [] (scanner input)
-  (env, _) <- interpretProgram x M.empty
+  (env, _) <- interpretProgram x (initEnv Nothing)
   print $ show env
-  let result = M.lookup lookup_key env
+  let result = lookupEnv lookup_key env
   case result of
     Just x' -> expected @=? x'
     Nothing -> assertFailure $ show env
@@ -35,7 +35,7 @@ test_program input lookup_key expected = testCase input $ do
 test_program_error input expected = testCase input $ do
   --let result = either (const LoxValueNil) $
   let x = fromRight [] $ P.parse loxProgram "" $ fromRight [] (scanner input)
-  (env, msg) <- interpretProgram x M.empty
+  (env, msg) <- interpretProgram x (initEnv Nothing)
   case msg of
     Just msg' -> expected @=? msg'
     Nothing -> assertFailure $ show env
@@ -43,7 +43,7 @@ test_program_error input expected = testCase input $ do
 test_errors input = testCase input $ do
   --let result = either (const LoxValueNil) $
   let x = P.parse equality "" $ fromRight [] (scanner input)
-  let (result, _) = runState (runExceptT (interpret $ fromRight LoxNil x)) M.empty
+  let (result, _) = runState (runExceptT (interpret $ fromRight LoxNil x)) (initEnv Nothing)
   assertBool input (isLeft result)
 
 test_expr = [
@@ -63,7 +63,7 @@ test_expr = [
   test_program "var a=-1;var b=-a;var c=a+b;print c;var result=a>b;" "result" (LoxValueBool False),
   test_program "var a=-1;var b=-a;var c=a+b;print c;var result=!(a>b);" "result" (LoxValueBool True),
   test_program "var x;var a;var b;var c;a=b = c= 10;x=a+b+c;" "x" (LoxValueDouble 30.0),
-  test_program_error "a=b = c= 10;x=a+b+c;" "Assignment to variable before declaration a"
+  test_program_error "a=b = c= 10;x=a+b+c;" "Assignment to variable before declaration c"
   ]
 
 
