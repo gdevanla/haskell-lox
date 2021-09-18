@@ -46,7 +46,7 @@ data Declaration = DeclVar Decl | DeclStatement Statement deriving (Show, Eq)
 
 data Decl = Decl T.Text (Maybe Expr)  deriving (Show, Eq)
 
-data Statement = StmtExpr Expr | StmtPrint Expr deriving (Show, Eq)
+data Statement = StmtExpr Expr | StmtPrint Expr | StmtBlock [Declaration] deriving (Show, Eq)
 
 data Expr
   = Number Double
@@ -187,17 +187,17 @@ equality = leftChain comparison (satisfyT f)
 
 assignment :: Parser Expr
 assignment = do
-  name <- satisfyT f1  -- for this version this will suffice
-  void $ satisfyT f
+  name <- satisfyT identifier -- for this version this will suffice
+  void $ satisfyT equals
   rhs <- try assignment <|> equality
   return $ Assignment name rhs
   where
-    f x = case tokinfo_type x of
+    equals x = case tokinfo_type x of
       EQUAL -> Just ()
       _ -> Nothing
 
-    f1 (LoxTokInfo (IDENTIFIER x) _ _ _) = Just (T.pack x)
-    f1 _ = Nothing
+    identifier (LoxTokInfo (IDENTIFIER x) _ _ _) = Just (T.pack x)
+    identifier _ = Nothing
 
 loxExpr :: Parser Expr
 loxExpr = try assignment <|> equality
@@ -219,7 +219,25 @@ loxPrintStmt = do
       _ -> Nothing
 
 loxStatement :: Parser Statement
-loxStatement = StmtExpr <$> try loxExpr <|> StmtPrint <$> loxPrintStmt
+loxStatement = StmtExpr <$> try loxExpr <|> StmtPrint <$> try loxPrintStmt
+  <|> loxBlock
+
+
+loxBlock :: Parser Statement
+loxBlock = do
+  void $ satisfyT left_brace
+  prog <- loxProgram
+  void $ satisfyT right_brace
+  return $ StmtBlock prog
+  where
+    left_brace x = case tokinfo_type x of
+      LEFT_BRACE -> Just ()
+      _ -> Nothing
+
+    right_brace x = case tokinfo_type x of
+      RIGHT_BRACE -> Just ()
+      _ -> Nothing
+
 
 loxDeclStatment :: Parser Declaration
 loxDeclStatment = DeclStatement <$> loxStatement
