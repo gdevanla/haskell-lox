@@ -8,7 +8,7 @@ import ExprParser
 import Text.Parsec as P
 
 test_parser input expected = testCase input $ do
-  let result = P.parse equality "" $ fromRight [] (scanner input)
+  let result = P.parse loxExpr  "" $ fromRight [] (scanner input)
   expected @=? result
 
 test_exprs = [
@@ -24,8 +24,10 @@ test_exprs = [
   test_parser "(1+2)/2;" $ Right (Binary
                                   (Binary (Number 1.0) Plus (Number 2.0))
                                   Slash
-                                  (Number 2.0))
+                                  (Number 2.0)),
+  test_parser "a=b=c=10;" $ Right (Assignment "a" (Assignment "b" (Assignment "c" (Number 10.0))))
   ]
+
 
 test_statement input expected =  testCase input $ do
   let lexer = scanner input

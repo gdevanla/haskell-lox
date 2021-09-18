@@ -200,7 +200,7 @@ assignment = do
     f1 _ = Nothing
 
 loxExpr :: Parser Expr
-loxExpr = assignment <|> equality
+loxExpr = try assignment <|> equality
 
 semi :: Parser ()
 semi = satisfyT f
