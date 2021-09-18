@@ -9,7 +9,9 @@ import Scanner
 import Text.Parsec
 
 -- https://craftinginterpreters.com/parsing-expressions.html
--- expression     → equality ;
+-- expression     → assignment ;
+-- assignment     → IDENTIFIER "=" assignment
+--                  | equality ;
 -- equality       → comparison ( ( "!=" | "==" ) comparison )* ;
 -- comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
 -- term           → factor ( ( "-" | "+" ) factor )* ;
@@ -55,6 +57,7 @@ data Expr
   | Paren Expr
   | Unary UnaryOp Expr
   | Binary Expr BinOp Expr
+  | Assignment T.Text Expr
   deriving (Show, Eq)
 
 -- satisfy = tokenPrim (t -> String) (SourcePos -> t -> s -> SourcePos) (t -> Maybe a)
@@ -182,9 +185,22 @@ equality = leftChain comparison (satisfyT f)
       EQUAL_EQUAL -> Just EqualEqual
       _ -> Nothing
 
+assignment :: Parser Expr
+assignment = do
+  name <- satisfyT f1  -- for this version this will suffice
+  void $ satisfyT f
+  rhs <- try assignment <|> equality
+  return $ Assignment name rhs
+  where
+    f x = case tokinfo_type x of
+      EQUAL -> Just ()
+      _ -> Nothing
+
+    f1 (LoxTokInfo (IDENTIFIER x) _ _ _) = Just (T.pack x)
+    f1 _ = Nothing
 
 loxExpr :: Parser Expr
-loxExpr = equality
+loxExpr = assignment <|> equality
 
 semi :: Parser ()
 semi = satisfyT f
