@@ -25,7 +25,7 @@ test_program input lookup_key expected = testCase input $ do
   --let result = either (const LoxValueNil) $
   let x = fromRight [] $ P.parse loxProgram  "" $ fromRight [] (scanner input)
   env <- interpretProgram  x M.empty
-  -- print $ show env
+  print $ show env
   let result = M.lookup lookup_key env
   case result of
     Just x' -> expected @=? x'
@@ -50,10 +50,10 @@ test_expr = [
   test_interpreter "var a;" $ Right LoxValueNil,
   test_errors "1>\"test\"",
   test_errors "1>5>6;",
-  test_program "var a=10;var b=100;var c=a+b;print c;var result=c;" "result" (LoxValueDouble 110.0)
-  -- test_program "var a=10;z=a+100;" $ Right (LoxValueDouble 110.0),
-  -- test_program "var b=10;100+b;" $ Right (LoxValueDouble 110.0),
-  -- test_program "var b=\"test\";b+\"append\";" $ Right (LoxValueDouble 110.0)
+  test_program "var a=10;var b=100;var c=a+b;print c;var result=c;" "result" (LoxValueDouble 110.0),
+  test_program "var a=-1;var b=-a;var c=a+b;print c;var result=c;" "result" (LoxValueDouble 0.0),
+  test_program "var a=-1;var b=-a;var c=a+b;print c;var result=a>b;" "result" (LoxValueBool False),
+  test_program "var a=-1;var b=-a;var c=a+b;print c;var result=!(a>b);" "result" (LoxValueBool True)
   ]
 
 

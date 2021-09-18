@@ -110,7 +110,7 @@ interpret (Unary op expr) = do
       LoxValueNil -> lift . return $ LoxValueBool True
       LoxValueBool b -> lift .return $ LoxValueBool (not b)
       _ ->  lift . return $ LoxValueBool True
-  lift . return $ value
+  -- lift . return $ LoxValueDouble 200000.0
 
 interpret (Binary expr1 op expr2) = do
   right_expr' <- interpret expr1
