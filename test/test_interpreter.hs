@@ -24,12 +24,13 @@ test_interpreter input expected = testCase input $ do
 test_program input lookup_key expected = testCase input $ do
   --let result = either (const LoxValueNil) $
   let x = fromRight [] $ P.parse loxProgram "" $ fromRight [] (scanner input)
-  (env, _) <- interpretProgram x (initEnv Nothing)
-  print $ show env
+  (env, msg) <- interpretProgram x (initEnv Nothing)
+  -- print $ show env
+  -- print $ show msg
   let result = lookupEnv lookup_key env
   case result of
     Just x' -> expected @=? x'
-    Nothing -> assertFailure $ show env
+    Nothing -> assertFailure $ show msg ++ show env
 
 
 test_program_error input expected = testCase input $ do
@@ -72,9 +73,11 @@ test_env = testCase "test_env"  $ do
   Just (LoxValueDouble 5.0) @=? lookupEnv "a" grand_child''
   Just (LoxValueBool True) @=? lookupEnv "z" grand_child''
 
-
-
   return ()
+
+
+
+
 
 test_interpreters = [
   test_interpreter "1>5;" $ Right (LoxValueBool False),
@@ -96,7 +99,13 @@ test_interpreters = [
   test_program_error "a=b = c= 10;x=a+b+c;" "Assignment to variable before declaration c",
 
   -- test env
-    test_env
+  test_env,
+
+  -- test block
+  test_program "var a=10; var b=20; var result; {var b=100; result=b+a; print result;};" "result" (LoxValueDouble 110.0),
+
+  test_program "var a=10; var b=20; var result; {var b=100; result=b+a;}; result=a+b;print result;" "result" (LoxValueDouble 30.0)
+
   ]
 
 

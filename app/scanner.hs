@@ -4,8 +4,11 @@
 import Import hiding (many, (<|>), try)
 import System.Environment
 import System.IO (print)
+import RIO.ByteString as BS
+import Data.Text.Encoding
 import Run
 import RIO.Process
+
 --import Options.Applicative.Simple
 import qualified Paths_haskell_lox
 
@@ -20,10 +23,13 @@ import Text.Parsec.String.Combinator (many1)
 
 import Text.Parsec
 import RIO.Partial (read)
+import ExprInterpreter
 
 main :: IO ()
-main = return ()
-  -- a <- getArgs
-  -- case a of
-  --   [s] -> either print print $ parse myParser "" s
-  --   _ -> error "please pass one argument with the string to parse"
+main = runSimpleApp $ do
+  args <- liftIO getArgs
+  case args of
+    filename:_ -> do
+      contents <- decodeUtf8 <$> BS.readFile filename
+      void $ liftIO $ runScript contents
+    [] -> liftIO $ print "Please provide path to a lox file"

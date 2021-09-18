@@ -2,7 +2,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module ExprInterpreter where
+module ExprInterpreter(interpret, interpretProgram, runScript, LoxValue(..), lookupEnv, updateEnv, insertEnv, initEnv) where
 import System.IO
 import Data.Text as T
 import Import hiding (many, try, (<|>))
@@ -11,6 +11,10 @@ import ExprParser
 import Control.Monad.Except
 import Data.Map.Strict as M
 import Control.Monad.State.Strict
+import Data.Maybe
+import Scanner (scanner)
+import qualified Text.Parsec as P
+import qualified Control.Monad
 
 -- https://www.seas.upenn.edu/~cis552/13fa/lectures/FunEnv.html
 data LoxValue
@@ -28,6 +32,7 @@ data Env = Env {
                parent :: Maybe Env
                } deriving (Show, Eq)
 
+initEnv :: Maybe Env -> Env
 initEnv parent = Env {env=M.empty, parent=parent}
 
 lookupEnv :: T.Text -> Env -> Maybe LoxValue
@@ -195,16 +200,23 @@ interpretStmt (StmtPrint expr) s = do
       print msg
       return (s', Just msg)
 
+interpretStmt (StmtBlock program) s = do
+  let s' = initEnv (Just s)
+  (s'', msg) <- interpretProgram program s'
+  case parent s'' of
+    Just p ->  return (p, msg)
+    Nothing -> return (s', Just "Unexpected state of environment where parent is missing from passed in child")
+
 interpretDeclaration :: Declaration -> Env -> IO (Env, Maybe T.Text)
 interpretDeclaration (DeclVar (Decl var (Just expr))) s = do
   let (result, s') = runState (runExceptT (interpret expr)) s
   case result of
         Right r -> do
-          print $ "setting value of " <> var <> " to " <> T.pack (show r)
+          -- print $ "setting value of " <> var <> " to " <> T.pack (show r)
           return $ (insertEnv var r s', Nothing)
         _ -> do
           let msg = "Error during declaration of" <> var
-          print msg
+          -- print msg
           return (s', Just msg)
 
 interpretDeclaration (DeclVar (Decl var Nothing)) s = do
@@ -223,3 +235,16 @@ interpretProgram (decl : decls) s = go
           (s'', msg'') <- interpretProgram decls s'
           return (s'', msg'')
 interpretProgram [] env = return (env, Nothing)
+
+runScript :: T.Text -> IO ()
+runScript script = do
+  let lex_result = scanner (T.unpack script)
+  case lex_result of
+    Right lex -> do
+      let ast = P.parse loxProgram "" lex
+      case ast of
+        Right ast' -> do
+          (_, msg) <- interpretProgram ast' (initEnv Nothing)
+          when (isJust msg) $ print msg
+        Left e -> print $ "Scanner error" <> show e
+    Left e -> print $ "Lexer error" <> show e
