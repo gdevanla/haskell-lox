@@ -23,14 +23,22 @@ test_interpreter input expected = testCase input $ do
 -- with this function we add back the final result of the script into the env and test the value of tat variable
 test_program input lookup_key expected = testCase input $ do
   --let result = either (const LoxValueNil) $
-  let x = fromRight [] $ P.parse loxProgram  "" $ fromRight [] (scanner input)
-  env <- interpretProgram  x M.empty
+  let x = fromRight [] $ P.parse loxProgram "" $ fromRight [] (scanner input)
+  (env, _) <- interpretProgram x M.empty
   print $ show env
   let result = M.lookup lookup_key env
   case result of
     Just x' -> expected @=? x'
     Nothing -> assertFailure $ show env
 
+
+test_program_error input expected = testCase input $ do
+  --let result = either (const LoxValueNil) $
+  let x = fromRight [] $ P.parse loxProgram "" $ fromRight [] (scanner input)
+  (env, msg) <- interpretProgram x M.empty
+  case msg of
+    Just msg' -> expected @=? msg'
+    Nothing -> assertFailure $ show env
 
 test_errors input = testCase input $ do
   --let result = either (const LoxValueNil) $
@@ -53,7 +61,9 @@ test_expr = [
   test_program "var a=10;var b=100;var c=a+b;print c;var result=c;" "result" (LoxValueDouble 110.0),
   test_program "var a=-1;var b=-a;var c=a+b;print c;var result=c;" "result" (LoxValueDouble 0.0),
   test_program "var a=-1;var b=-a;var c=a+b;print c;var result=a>b;" "result" (LoxValueBool False),
-  test_program "var a=-1;var b=-a;var c=a+b;print c;var result=!(a>b);" "result" (LoxValueBool True)
+  test_program "var a=-1;var b=-a;var c=a+b;print c;var result=!(a>b);" "result" (LoxValueBool True),
+  test_program "var x;var a;var b;var c;a=b = c= 10;x=a+b+c;" "x" (LoxValueDouble 30.0),
+  test_program_error "a=b = c= 10;x=a+b+c;" "Assignment to variable before declaration a"
   ]
 
 

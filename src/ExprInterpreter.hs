@@ -134,45 +134,62 @@ interpret (Binary expr1 op expr2) = do
       (LoxValueString x, LoxValueString y) -> lift .return $ LoxValueString $ x <> y
       (LoxValueDouble x, LoxValueDouble y) -> lift . return $ LoxValueDouble $ x + y
       (x, y) -> ExceptT . return . Left $ T.pack $ "Unsupported operation (+) on "  ++ show x ++ " and " ++ show y
+interpret (Assignment lhs rhs) = do
+  s <- get
+  if M.member lhs s then
+    do
+      expr <- interpret rhs
+      s' <- get  -- need to get an s after all rhs are processed
+      put $ M.update (\_ -> Just expr) lhs s'
+      lift . return  $ expr
+  else ExceptT . return . Left $ "Assignment to variable before declaration " <> lhs
 
-interpretStmt :: Statement -> Env -> IO Env
+
+interpretStmt :: Statement -> Env -> IO (Env, Maybe T.Text)
 interpretStmt (StmtExpr expr) s = do
   let (result, s') = runState (runExceptT (interpret expr)) s
   case result of
-    Right _ -> return s'
+    Right _ -> return (s', Nothing)
     Left e -> do
       print e
-      return s'
+      return (s', Just e)
 
 interpretStmt (StmtPrint expr) s = do
   let (result, s') = runState (runExceptT (interpret expr)) s
   case result of
-    Right x -> putStrLn $ showLoxValue x
-    Left x -> print $ "Unexpected error" <> x
-  return s'
+    Right x -> do
+      putStrLn $ showLoxValue x
+      return (s', Nothing)
+    Left x -> do
+      let msg = "Unexpected error" <> x
+      print msg
+      return (s', Just msg)
 
-interpretDeclaration :: Declaration -> Env -> IO Env
+interpretDeclaration :: Declaration -> Env -> IO (Env, Maybe T.Text)
 interpretDeclaration (DeclVar (Decl var (Just expr))) s = do
   let (result, s') = runState (runExceptT (interpret expr)) s
   case result of
         Right r -> do
           print $ "setting value of " <> var <> " to " <> T.pack (show r)
-          return $ M.insert var r s'
+          return $ (M.insert var r s', Nothing)
         _ -> do
-          print $ "Error during declaration of" <> var
-          return s'
+          let msg = "Error during declaration of" <> var
+          print msg
+          return (s', Just msg)
 
 interpretDeclaration (DeclVar (Decl var Nothing)) s = do
-  return $ M.insert var LoxValueNil s
+  return (M.insert var LoxValueNil s, Nothing)
 
 interpretDeclaration (DeclStatement stmt) s = interpretStmt stmt s
 
-interpretProgram :: Program -> Env -> IO Env
+interpretProgram :: Program -> Env -> IO (Env, Maybe T.Text)
 interpretProgram (decl : decls) s = go
   where
     go = do
-      s' <- interpretDeclaration decl s
-      -- print $ show s'
-      s'' <- interpretProgram decls s'
-      return s''
-interpretProgram [] env = return env
+      (s', msg) <- interpretDeclaration decl s
+      case msg of
+        Just msg' -> return (s', Just msg')
+        Nothing -> do
+          (s'', msg'') <- interpretProgram decls s'
+          return (s'', msg'')
+interpretProgram [] env = return (env, Nothing)
