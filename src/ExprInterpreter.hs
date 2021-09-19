@@ -201,6 +201,13 @@ interpretStmt (StmtPrint expr) s = do
       print msg
       return (s', Just msg)
 
+interpretStmt (StmtBlock program) s = do
+  let s' = initEnv (Just s)
+  (s'', msg) <- interpretProgram program s'
+  case parent s'' of
+    Just p ->  return (p, msg)
+    Nothing -> return (s', Just "Unexpected state of environment where parent is missing from passed in child")
+
 interpretDeclaration :: Declaration -> Env -> IO (Env, Maybe T.Text)
 interpretDeclaration (DeclVar (Decl var (Just expr))) s = do
   let (result, s') = runState (runExceptT (interpret expr)) s
@@ -218,12 +225,6 @@ interpretDeclaration (DeclVar (Decl var Nothing)) s = do
 
 interpretDeclaration (DeclStatement stmt) s = interpretStmt stmt s
 
-interpretDeclaration (DeclBlock program) s = do
-  let s' = initEnv (Just s)
-  (s'', msg) <- interpretProgram program s'
-  case parent s'' of
-    Just p ->  return (p, msg)
-    Nothing -> return (s', Just "Unexpected state of environment where parent is missing from passed in child")
 
 
 interpretProgram :: Program -> Env -> IO (Env, Maybe T.Text)

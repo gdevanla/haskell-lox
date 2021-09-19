@@ -42,11 +42,13 @@ data UnaryOp = UnaryMinus | UnaryBang deriving (Show, Eq)
 
 type Program = [Declaration]
 
-data Declaration = DeclVar Decl | DeclStatement Statement | DeclBlock [Declaration] deriving (Show, Eq)
+data Declaration = DeclVar Decl | DeclStatement Statement  deriving (Show, Eq)
 
 data Decl = Decl T.Text (Maybe Expr)  deriving (Show, Eq)
 
-data Statement = StmtExpr Expr | StmtPrint Expr  deriving (Show, Eq)
+data Statement = StmtExpr Expr | StmtPrint Expr | StmtIf IfElse | StmtBlock [Declaration] deriving (Show, Eq)
+
+data IfElse = IfElse Expr Statement (Maybe Statement) deriving (Show, Eq)
 
 data Expr
   = Number Double
@@ -218,15 +220,37 @@ loxPrintStmt = do
       PRINT -> Just ()
       _ -> Nothing
 
-loxStatement :: Parser Statement
-loxStatement = StmtExpr <$> (try loxExpr <* semi) <|> StmtPrint <$> (try loxPrintStmt <* semi)
+ifStmt :: Parser Statement
+ifStmt = do
+  void $ satisfyT if_keyword
+  condition <- loxParenExpr
+  if_statement <- loxStatement
+  else_statement <- optionMaybe elseStmt
+  return $ StmtIf $ IfElse condition if_statement else_statement
+  where
+    if_keyword x = case tokinfo_type x of
+      IF -> Just ()
+      _ -> Nothing
 
-loxBlock :: Parser Declaration
+    else_keyword x = case tokinfo_type x of
+      ELSE -> Just ()
+      _ -> Nothing
+
+    elseStmt = do
+      void $ satisfyT else_keyword
+      loxStatement
+
+
+loxStatement :: Parser Statement
+loxStatement = StmtExpr <$> (try loxExpr <* semi) <|> StmtPrint <$> (try loxPrintStmt <* semi) <|> try ifStmt <|> loxBlock
+
+
+loxBlock :: Parser Statement
 loxBlock = do
   void $ satisfyT left_brace
   prog <- loxProgram
   void $ satisfyT right_brace
-  return $ DeclBlock prog
+  return $ StmtBlock prog
   where
     left_brace x = case tokinfo_type x of
       LEFT_BRACE -> Just ()
@@ -267,7 +291,7 @@ loxDeclaration = do
 
 
 loxDeclarations :: Parser Declaration
-loxDeclarations = try loxDeclaration  <|> DeclStatement <$> loxStatement <|> loxBlock
+loxDeclarations = try loxDeclaration  <|> DeclStatement <$> loxStatement
 
 loxProgram :: Parser Program
 loxProgram = many loxDeclarations -- endBy1 loxDeclarations semi
