@@ -253,6 +253,7 @@ runScript script = do
 
 type HaskellLineT = InputT (StateT Env IO) ()
 
+runScriptInteractive :: IO ((), Env)
 runScriptInteractive = runStateT (runInputT defaultSettings loop) (initEnv Nothing)
   where
     loop :: HaskellLineT
