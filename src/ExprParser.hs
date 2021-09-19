@@ -7,6 +7,7 @@ import Data.Text as T
 import Import hiding (many, try, (<|>))
 import Scanner
 import Text.Parsec
+import qualified Data.List as L
 
 -- https://craftinginterpreters.com/parsing-expressions.html
 -- expression     → assignment ;
@@ -34,6 +35,8 @@ import Text.Parsec
 --                | "+"  | "-"  | "*" | "/" ;
 
 type LoxParserResult = Either ParseError Expr
+
+data LoxSourcePos = LoxSourcePos !Int !Int deriving (Show, Eq)
 
 data BinOp = NotEqual | EqualEqual | Gt | Gte | Lt | Lte | Plus | Minus | Star | Slash
   deriving (Show, Eq)
@@ -68,6 +71,7 @@ data Expr
   | Binary Expr BinOp Expr
   | Assignment T.Text Expr
   | Logical Expr LogicOp Expr
+  | Call Expr [Expr] LoxSourcePos
   deriving (Show, Eq)
 
 -- satisfy = tokenPrim (t -> String) (SourcePos -> t -> s -> SourcePos) (t -> Maybe a)
@@ -170,7 +174,39 @@ unary' = Unary <$> satisfyT f <*> unary
 
 
 unary :: Parser Expr
-unary = unary' <|> loxPrimary
+unary = try unary' <|> call
+
+call :: Parser Expr
+call = do
+  primary <- loxPrimary
+  func_args <- many funcCall
+  case func_args of
+   _:_ -> return $ L.foldl' step primary func_args
+   [] -> return primary
+  where
+    step acc (exprs, close_tok) = Call acc exprs (getLoxSourcePos close_tok)
+    getLoxSourcePos close_tok = let sc = tok_position close_tok
+      in
+      LoxSourcePos (sourceLine sc) (sourceColumn sc)
+
+
+funcCall :: Parser ([Expr], LoxTokInfo)
+funcCall = do
+  void $ satisfyT open_paren
+  arguments <- loxArguments
+  close_tok <- satisfyT close_paren
+  return (arguments, close_tok)
+  where
+    open_paren x = case tokinfo_type x of
+      LEFT_PAREN -> Just x
+      _ -> Nothing
+
+    close_paren x = case tokinfo_type x of
+     RIGHT_PAREN -> Just x
+     _ -> Nothing
+
+loxArguments :: Parser [Expr]
+loxArguments = sepBy loxExpr comma -- skipping validation of max argument count
 
 factor :: Parser Expr
 factor = leftChain unary (satisfyT f)
@@ -244,6 +280,13 @@ semi = satisfyT f
   where
     f x = case tokinfo_type x of
       SEMICOLON -> Just ()
+      _ -> Nothing
+
+comma :: Parser ()
+comma = satisfyT f
+  where
+    f x = case tokinfo_type x of
+      COMMA -> Just ()
       _ -> Nothing
 
 loxPrintStmt :: Parser Expr

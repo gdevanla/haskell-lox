@@ -80,8 +80,30 @@ test_statements = [
       ],
 
   test_statement "while (a==10) {print a;}" $
-    Right [DeclStatement (StmtWhile (While (Binary (Identifier "a") EqualEqual (Number 10.0)) (StmtBlock [DeclStatement (StmtPrint (Identifier "a"))])))]
+    Right [DeclStatement (StmtWhile (While (Binary (Identifier "a") EqualEqual (Number 10.0)) (StmtBlock [DeclStatement (StmtPrint (Identifier "a"))])))],
+
+  test_statement "func(x1, x2);" $
+    Right [DeclStatement (StmtExpr
+                          (Call (Identifier "func")
+                           [Identifier "x1", Identifier "x2"]
+                           (LoxSourcePos 1 12)))],
+
+  test_statement "func(x3)(x1, x2);" $
+    Right [DeclStatement (StmtExpr (Call
+                                    (Call (Identifier "func") [Identifier "x3"] (LoxSourcePos 1 8))
+                                    [Identifier "x1",Identifier "x2"]
+                                    (LoxSourcePos 1 16)))],
+
+  test_statement "func(x3)(func(x1), x2);" $
+     Right [DeclStatement (StmtExpr (Call (
+                                        Call (Identifier "func") [Identifier "x3"] (LoxSourcePos 1 8))
+                                      [Call (Identifier "func") [Identifier "x1"] (LoxSourcePos 1 17),
+                                       Identifier "x2"] (LoxSourcePos 1 22)))
+           ]
+
   ]
+
+
 
 test_parsers = test_exprs ++ test_statements
 
