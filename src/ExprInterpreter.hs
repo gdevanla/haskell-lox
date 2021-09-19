@@ -2,7 +2,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module ExprInterpreter(interpret, interpretProgram, runScript, LoxValue(..), lookupEnv, updateEnv, insertEnv, initEnv) where
+module ExprInterpreter(interpret, interpretProgram, runScript, LoxValue(..), lookupEnv, updateEnv, insertEnv, initEnv, runScriptInteractive) where
 import System.IO
 import Data.Text as T
 import Import hiding (many, try, (<|>))
@@ -15,6 +15,7 @@ import Data.Maybe
 import Scanner (scanner)
 import qualified Text.Parsec as P
 import qualified Control.Monad
+import System.Console.Haskeline
 
 -- https://www.seas.upenn.edu/~cis552/13fa/lectures/FunEnv.html
 data LoxValue
@@ -248,3 +249,67 @@ runScript script = do
           when (isJust msg) $ print msg
         Left e -> print $ "Scanner error" <> show e
     Left e -> print $ "Lexer error" <> show e
+
+
+type HaskellLineT = InputT (StateT Env IO) ()
+
+runScriptInteractive = runStateT (runInputT defaultSettings loop) (initEnv Nothing)
+  where
+    loop :: HaskellLineT
+    loop = do
+      minput <- getInputLine "%"
+      when (isNothing minput) loop
+      env <- lift get
+      let lex_result = scanner (fromJust minput)
+      case lex_result of
+        Right lex -> do
+          let ast = P.parse loxProgram "" lex
+          case ast of
+            Right ast' -> do
+              (env', msg) <- liftIO $ interpretProgram ast' env
+              when (isJust msg) $ liftIO $ print msg
+              lift $ put env'
+              loop
+            Left e -> do
+              liftIO $ print $ "Scanner error" <> show e
+              loop
+        Left e -> do
+          liftIO $ print $ "Lexer error" <> show e
+          loop
+
+-- runScriptInteractive = runInputT defaultSettings loop
+--   where
+--     loop :: InputT IO ()
+--     loop = do
+--       minput <- getInputLine "% "
+--       case minput of
+--         Nothing -> return ()
+--         Just "quit" -> return ()
+--         Just input -> do outputStrLn $ "Input was: " ++ input
+--                          loop
+
+
+-- runScriptInteractive :: IO ()
+-- runScriptInteractive = do
+--   System.IO.hSetEcho stdin False
+--   putStrLn "Starting lox interactive prompt"
+--   go (initEnv Nothing)
+--   where
+--     go env = do
+--       putStr "lox> "
+--       line <- getLine
+--       print line
+--       when (line == "") (go env)
+--       let lex_result = scanner line
+--       case lex_result of
+--         Right lex -> do
+--           let ast = P.parse loxProgram "" lex
+--           case ast of
+--             Right ast' -> do
+--               (env', msg) <- interpretProgram ast' env
+--               when (isJust msg) $ print msg
+--               go env'
+--             Left e -> do
+--               print $ "Scanner error" <> show e
+--               go env
+--         Left e -> print $ "Lexer error" <> show e

@@ -32,4 +32,6 @@ main = runSimpleApp $ do
     filename:_ -> do
       contents <- decodeUtf8 <$> BS.readFile filename
       void $ liftIO $ runScript contents
-    [] -> liftIO $ print "Please provide path to a lox file"
+    [] -> do
+      void $ liftIO runScriptInteractive
+      liftIO $ return ()
