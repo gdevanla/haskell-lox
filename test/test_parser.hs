@@ -51,7 +51,8 @@ test_statements = [
     Right [DeclVar (Decl "x" Nothing), DeclStatement (StmtExpr (Identifier "x"))],
   test_statement "var a;var b;print a+b;" $
     Right $ [DeclVar (Decl "a" Nothing), DeclVar (Decl "b" Nothing), DeclStatement (StmtPrint (Binary (Identifier "a") Plus (Identifier "b")))],
-  test_statement "var b=100; {var a=10;};" $ Right [DeclVar (Decl "b" (Just (Number 100.0))), DeclStatement (StmtBlock [DeclVar (Decl "a" (Just (Number 10.0)))])]
+  test_statement "var b=100; {var a=10;}" $ Right [DeclVar (Decl "b" (Just (Number 100.0))), DeclBlock [DeclVar (Decl "a" (Just (Number 10.0)))]],
+  test_statement "var b=100; {var a=10;} var x=100;" $ Right [DeclVar (Decl "b" (Just (Number 100.0))), DeclBlock [DeclVar (Decl "a" (Just (Number 10.0)))], DeclVar (Decl "x" (Just (Number 100.0)))]
   ]
 
 test_parsers = test_exprs ++ test_statements

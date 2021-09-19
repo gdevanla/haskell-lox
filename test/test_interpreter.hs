@@ -104,7 +104,7 @@ test_interpreters = [
   -- test block
   test_program "var a=10; var b=20; var result; {var b=100; result=b+a; print result;};" "result" (LoxValueDouble 110.0),
 
-  test_program "var a=10; var b=20; var result; {var b=100; result=b+a;}; result=a+b;print result;" "result" (LoxValueDouble 30.0)
+  test_program "var a=10; var b=20; var result; {var b=100; result=b+a;} result=a+b;print result;" "result" (LoxValueDouble 30.0)
 
   ]
 
