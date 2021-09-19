@@ -17,34 +17,35 @@ test_interpreter input expected = testCase input $ do
   --let result = either (const LoxValueNil) $
   let x = P.parse equality "" $ fromRight [] (scanner input)
   -- let result = interpret $ fromRight LoxNil x
-  let (result, _) = runState (runExceptT (interpret $ fromRight LoxNil x)) (initEnv Nothing)
+  (result, _) <- liftIO $ runStateT (runExceptT (interpret $ fromRight LoxNil x)) (initEnv Nothing)
   expected @=? result
 
 -- with this function we add back the final result of the script into the env and test the value of tat variable
 test_program input lookup_key expected = testCase input $ do
   --let result = either (const LoxValueNil) $
   let x = fromRight [] $ P.parse loxProgram "" $ fromRight [] (scanner input)
-  (env, msg) <- interpretProgram x (initEnv Nothing)
+  (lox_result, env) <- liftIO $ runStateT (runExceptT (interpretProgram x)) (initEnv Nothing)
   -- print $ show env
   -- print $ show msg
   let result = lookupEnv lookup_key env
   case result of
     Just x' -> expected @=? x'
-    Nothing -> assertFailure $ show msg ++ show env
+    Nothing -> assertFailure $ show lox_result ++ show env
 
 
 test_program_error input expected = testCase input $ do
   --let result = either (const LoxValueNil) $
   let x = fromRight [] $ P.parse loxProgram "" $ fromRight [] (scanner input)
-  (env, msg) <- interpretProgram x (initEnv Nothing)
-  case msg of
-    Just msg' -> expected @=? msg'
-    Nothing -> assertFailure $ show env
+  (result, _) <- liftIO $ runStateT (runExceptT (interpretProgram x)) (initEnv Nothing)
+  -- case msg of
+  --   Just msg' -> expected @=? msg'
+  --   Nothing -> assertFailure $ show env
+  assertBool input (isLeft result)
 
 test_errors input = testCase input $ do
   --let result = either (const LoxValueNil) $
   let x = P.parse equality "" $ fromRight [] (scanner input)
-  let (result, _) = runState (runExceptT (interpret $ fromRight LoxNil x)) (initEnv Nothing)
+  (result, _) <- liftIO $ runStateT (runExceptT (interpret $ fromRight LoxNil x)) (initEnv Nothing)
   assertBool input (isLeft result)
 
 
