@@ -125,7 +125,9 @@ test_interpreters = [
 
     -- check precdence
     test_program "var result=false or true and true;" "result" (LoxValueBool True),
-    test_program "var result=true or true and false;" "result" (LoxValueBool True)
+    test_program "var result=true or true and false;" "result" (LoxValueBool True),
+
+    test_program "var result=0; while(result<10) {result=result+1;}" "result" (LoxValueDouble 10.0)
 
   ]
 

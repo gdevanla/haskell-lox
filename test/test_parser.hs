@@ -68,9 +68,19 @@ test_statements = [
   Right [DeclStatement (StmtIf (IfElse (Binary (Identifier "x") EqualEqual (Number 1.0)) (StmtBlock [DeclStatement (StmtPrint (Identifier "x"))]) (Just (StmtBlock [DeclStatement (StmtPrint (LoxBool True))]))))],
 
   test_statement "true or false and true;" $
-    Right [DeclStatement (StmtExpr (Logical (LoxBool True) Or
-                                    (Logical (LoxBool False) And (LoxBool True))))
-          ]
+    Right
+      [ DeclStatement
+          ( StmtExpr
+              ( Logical
+                  (LoxBool True)
+                  Or
+                  (Logical (LoxBool False) And (LoxBool True))
+              )
+          )
+      ],
+
+  test_statement "while (a==10) {print a;}" $
+    Right [DeclStatement (StmtWhile (While (Binary (Identifier "a") EqualEqual (Number 10.0)) (StmtBlock [DeclStatement (StmtPrint (Identifier "a"))])))]
   ]
 
 test_parsers = test_exprs ++ test_statements

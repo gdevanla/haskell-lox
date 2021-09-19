@@ -206,6 +206,16 @@ interpretStmt (StmtIf (IfElse cond ifexpr elseexpr)) = do
     then interpretStmt ifexpr
     else maybe (return LoxValueNil) interpretStmt elseexpr
 
+interpretStmt (StmtWhile (While cond stmt)) = go
+  where
+    go = do
+      cond_result <- interpret cond
+      if isTruthy cond_result then  do
+        void $ interpretStmt stmt
+        go
+        else return LoxValueSentinel
+
+
 -- interpretDeclaration :: Declaration -> Env -> IO (Env, Maybe T.Text)
 interpretDeclaration :: Declaration -> InterpreterTIO
 interpretDeclaration (DeclVar (Decl var (Just expr))) = do

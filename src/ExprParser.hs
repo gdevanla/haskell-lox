@@ -48,9 +48,14 @@ data Declaration = DeclVar Decl | DeclStatement Statement  deriving (Show, Eq)
 
 data Decl = Decl T.Text (Maybe Expr)  deriving (Show, Eq)
 
-data Statement = StmtExpr Expr | StmtPrint Expr | StmtIf IfElse | StmtBlock [Declaration] deriving (Show, Eq)
+data Statement = StmtExpr Expr | StmtPrint Expr | StmtIf IfElse | StmtBlock [Declaration]
+  | StmtWhile While
+  deriving (Show, Eq)
+
 
 data IfElse = IfElse Expr Statement (Maybe Statement) deriving (Show, Eq)
+
+data While = While Expr Statement deriving (Show, Eq)
 
 data Expr
   = Number Double
@@ -271,8 +276,20 @@ ifStmt = do
       loxStatement
 
 
+whileStmt :: Parser Statement
+whileStmt = do
+  void $ satisfyT while_keyword
+  condition <- loxParenExpr
+  statement <- loxStatement
+  return $ StmtWhile $ While condition statement
+  where
+    while_keyword x = case tokinfo_type x of
+      WHILE -> Just ()
+      _ -> Nothing
+
+
 loxStatement :: Parser Statement
-loxStatement = StmtExpr <$> (try loxExpr <* semi) <|> StmtPrint <$> (try loxPrintStmt <* semi) <|> try ifStmt <|> loxBlock
+loxStatement = StmtExpr <$> (try loxExpr <* semi) <|> StmtPrint <$> (try loxPrintStmt <* semi) <|> try ifStmt <|> try whileStmt <|> loxBlock
 
 
 loxBlock :: Parser Statement
