@@ -104,7 +104,13 @@ test_interpreters = [
   -- test block
   test_program "var a=10; var b=20; var result; {var b=100; result=b+a; print result;};" "result" (LoxValueDouble 110.0),
 
-  test_program "var a=10; var b=20; var result; {var b=100; result=b+a;} result=a+b;print result;" "result" (LoxValueDouble 30.0)
+  test_program "var a=10; var b=20; var result; {var b=100; result=b+a;} result=a+b;print result;" "result" (LoxValueDouble 30.0),
+
+  -- ifelse conditions
+  test_program "var a=10;var result;if (a!=10) {result=10;} else {result=20;} print result;" "result" (LoxValueDouble 20.0),
+
+  test_program "var a=10;var result;if (a==10) {result=100;} else {result=20;} print result;" "result" (LoxValueDouble 100.0)
+
 
   ]
 

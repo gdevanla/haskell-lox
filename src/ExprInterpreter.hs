@@ -66,29 +66,6 @@ showLoxValue LoxValueNil = "nil"
 showLoxValue (LoxValueBool b) = show b
 showLoxValue (LoxValueIdentifier b) = show b
 
--- unpackIdentifier :: LoxValue -> LoxValue -> ExceptT T.Text (State Env) (LoxValue, LoxValue)
--- unpackIdentifier (LoxValueIdentifier x) (LoxValueIdentifier y) = do
---   s <- get
---   let v1 = M.lookup x s
---   let v2 = M.lookup y s
---   case (v1, v2) of
---     (Just v1', Just v2') -> lift . return $ (v1', v2')
---     (_, Nothing) -> ExceptT . return $ Left $ "Unknown var" <> y
---     (Nothing, _) -> ExceptT . return $ Left $ "Unknown var" <> x
--- unpackIdentifier (LoxValueIdentifier x) y = do
---   s <- get
---   let v1 = M.lookup x s
---   case v1 of
---     Just v' -> lift . return $ (v', y)
---     Nothing -> ExceptT . return $ Left $ "Unknown var" <> x
--- unpackIdentifier x (LoxValueIdentifier y) = do
---   s <- get
---   let v1 = M.lookup y s
---   case v1 of
---     Just v' -> lift . return $ (x, v')
---     Nothing -> ExceptT . return $ Left $ "Unknown var" <> y
--- unpackIdentifier x y = lift . return $ (x, y)
-
 unpackIdent :: LoxValue -> InterpreterT
 unpackIdent (LoxValueIdentifier x) = do
   s <- get
@@ -207,6 +184,23 @@ interpretStmt (StmtBlock program) s = do
   case parent s'' of
     Just p ->  return (p, msg)
     Nothing -> return (s', Just "Unexpected state of environment where parent is missing from passed in child")
+
+interpretStmt (StmtIf (IfElse cond ifexpr elseexpr)) s = do
+  let (cond_result, s') = runState (runExceptT (interpret cond)) s
+  case cond_result of
+    Right cr -> do
+      if is_truthy cr
+        then interpretStmt ifexpr s'
+        else if isJust elseexpr then interpretStmt (fromJust elseexpr) s' else return (s, Nothing)
+    Left cr -> do
+      let msg = "Unexpected error" <> cr
+      print msg
+      return (s, Just msg)
+  where
+    is_truthy LoxValueNil = False
+    is_truthy (LoxValueBool x) = x
+    is_truthy _ = True
+
 
 interpretDeclaration :: Declaration -> Env -> IO (Env, Maybe T.Text)
 interpretDeclaration (DeclVar (Decl var (Just expr))) s = do
