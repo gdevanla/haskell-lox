@@ -51,8 +51,36 @@ test_statements = [
     Right [DeclVar (Decl "x" Nothing), DeclStatement (StmtExpr (Identifier "x"))],
   test_statement "var a;var b;print a+b;" $
     Right $ [DeclVar (Decl "a" Nothing), DeclVar (Decl "b" Nothing), DeclStatement (StmtPrint (Binary (Identifier "a") Plus (Identifier "b")))],
-  test_statement "var b=100; {var a=10;}" $ Right [DeclVar (Decl "b" (Just (Number 100.0))), DeclBlock [DeclVar (Decl "a" (Just (Number 10.0)))]],
-  test_statement "var b=100; {var a=10;} var x=100;" $ Right [DeclVar (Decl "b" (Just (Number 100.0))), DeclBlock [DeclVar (Decl "a" (Just (Number 10.0)))], DeclVar (Decl "x" (Just (Number 100.0)))]
+
+  -- test blocks
+  test_statement "var b=100; {var a=10;}" $ Right [DeclVar (Decl "b" (Just (Number 100.0))), DeclStatement (StmtBlock [DeclVar (Decl "a" (Just (Number 10.0)))])],
+  test_statement "var b=100; {var a=10;} var x=100;" $
+    Right [DeclVar (Decl "b" (Just (Number 100.0))),
+           DeclStatement (StmtBlock [DeclVar (Decl "a" (Just (Number 10.0)))]),
+           DeclVar (Decl "x" (Just (Number 100.0)))],
+
+  -- if conditions
+  test_statement "if (x==1) print x; else print true;" $
+    Right
+      [DeclStatement (StmtIf (IfElse (Binary (Identifier "x") EqualEqual (Number 1.0)) (StmtPrint (Identifier "x")) (Just (StmtPrint (LoxBool True)))))],
+
+  test_statement "if (x==1) {print x;} else {print true;}" $
+  Right [DeclStatement (StmtIf (IfElse (Binary (Identifier "x") EqualEqual (Number 1.0)) (StmtBlock [DeclStatement (StmtPrint (Identifier "x"))]) (Just (StmtBlock [DeclStatement (StmtPrint (LoxBool True))]))))],
+
+  test_statement "true or false and true;" $
+    Right
+      [ DeclStatement
+          ( StmtExpr
+              ( Logical
+                  (LoxBool True)
+                  Or
+                  (Logical (LoxBool False) And (LoxBool True))
+              )
+          )
+      ],
+
+  test_statement "while (a==10) {print a;}" $
+    Right [DeclStatement (StmtWhile (While (Binary (Identifier "a") EqualEqual (Number 10.0)) (StmtBlock [DeclStatement (StmtPrint (Identifier "a"))])))]
   ]
 
 test_parsers = test_exprs ++ test_statements

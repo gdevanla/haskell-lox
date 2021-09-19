@@ -40,13 +40,22 @@ data BinOp = NotEqual | EqualEqual | Gt | Gte | Lt | Lte | Plus | Minus | Star |
 
 data UnaryOp = UnaryMinus | UnaryBang deriving (Show, Eq)
 
+data LogicOp = And | Or deriving (Show, Eq)
+
 type Program = [Declaration]
 
-data Declaration = DeclVar Decl | DeclStatement Statement | DeclBlock [Declaration] deriving (Show, Eq)
+data Declaration = DeclVar Decl | DeclStatement Statement  deriving (Show, Eq)
 
 data Decl = Decl T.Text (Maybe Expr)  deriving (Show, Eq)
 
-data Statement = StmtExpr Expr | StmtPrint Expr  deriving (Show, Eq)
+data Statement = StmtExpr Expr | StmtPrint Expr | StmtIf IfElse | StmtBlock [Declaration]
+  | StmtWhile While
+  deriving (Show, Eq)
+
+
+data IfElse = IfElse Expr Statement (Maybe Statement) deriving (Show, Eq)
+
+data While = While Expr Statement deriving (Show, Eq)
 
 data Expr
   = Number Double
@@ -58,6 +67,7 @@ data Expr
   | Unary UnaryOp Expr
   | Binary Expr BinOp Expr
   | Assignment T.Text Expr
+  | Logical Expr LogicOp Expr
   deriving (Show, Eq)
 
 -- satisfy = tokenPrim (t -> String) (SourcePos -> t -> s -> SourcePos) (t -> Maybe a)
@@ -88,6 +98,18 @@ leftChain p op = do
       op' <- op
       e1 <- p
       maybeAddSuffix (Binary e0 op' e1)
+
+    maybeAddSuffix e = addSuffix e <|> return e
+
+leftChainLogic :: Parser Expr -> Parser LogicOp -> Parser Expr
+leftChainLogic p op = do
+  expr <- p
+  maybeAddSuffix expr
+  where
+    addSuffix e0 = do
+      op' <- op
+      e1 <- p
+      maybeAddSuffix (Logical e0 op' e1)
 
     maybeAddSuffix e = addSuffix e <|> return e
 
@@ -200,7 +222,22 @@ assignment = do
     identifier _ = Nothing
 
 loxExpr :: Parser Expr
-loxExpr = try assignment <|> equality
+loxExpr = try assignment <|> loxLogicOr
+
+loxLogicOr :: Parser Expr
+loxLogicOr = leftChainLogic loxLogicAnd (satisfyT f)
+  where
+    f x = case tokinfo_type x of
+      OR -> Just Or
+      _ -> Nothing
+
+loxLogicAnd :: Parser Expr
+loxLogicAnd = leftChainLogic equality (satisfyT f)
+  where
+    f x = case tokinfo_type x of
+      AND -> Just And
+      _ -> Nothing
+
 
 semi :: Parser ()
 semi = satisfyT f
@@ -218,15 +255,49 @@ loxPrintStmt = do
       PRINT -> Just ()
       _ -> Nothing
 
-loxStatement :: Parser Statement
-loxStatement = StmtExpr <$> (try loxExpr <* semi) <|> StmtPrint <$> (try loxPrintStmt <* semi)
+ifStmt :: Parser Statement
+ifStmt = do
+  void $ satisfyT if_keyword
+  condition <- loxParenExpr
+  if_statement <- loxStatement
+  else_statement <- optionMaybe elseStmt
+  return $ StmtIf $ IfElse condition if_statement else_statement
+  where
+    if_keyword x = case tokinfo_type x of
+      IF -> Just ()
+      _ -> Nothing
 
-loxBlock :: Parser Declaration
+    else_keyword x = case tokinfo_type x of
+      ELSE -> Just ()
+      _ -> Nothing
+
+    elseStmt = do
+      void $ satisfyT else_keyword
+      loxStatement
+
+
+whileStmt :: Parser Statement
+whileStmt = do
+  void $ satisfyT while_keyword
+  condition <- loxParenExpr
+  statement <- loxStatement
+  return $ StmtWhile $ While condition statement
+  where
+    while_keyword x = case tokinfo_type x of
+      WHILE -> Just ()
+      _ -> Nothing
+
+
+loxStatement :: Parser Statement
+loxStatement = StmtExpr <$> (try loxExpr <* semi) <|> StmtPrint <$> (try loxPrintStmt <* semi) <|> try ifStmt <|> try whileStmt <|> loxBlock
+
+
+loxBlock :: Parser Statement
 loxBlock = do
   void $ satisfyT left_brace
   prog <- loxProgram
   void $ satisfyT right_brace
-  return $ DeclBlock prog
+  return $ StmtBlock prog
   where
     left_brace x = case tokinfo_type x of
       LEFT_BRACE -> Just ()
@@ -267,10 +338,10 @@ loxDeclaration = do
 
 
 loxDeclarations :: Parser Declaration
-loxDeclarations = try loxDeclaration  <|> DeclStatement <$> loxStatement <|> loxBlock
+loxDeclarations = try loxDeclaration  <|> DeclStatement <$> loxStatement
 
 loxProgram :: Parser Program
-loxProgram = many loxDeclarations -- endBy1 loxDeclarations semi
+loxProgram = many1 loxDeclarations -- endBy1 loxDeclarations semi
 
 scannerLoxTokens :: [LoxTokInfo] -> LoxParserResult
 scannerLoxTokens = parse loxExpr ""

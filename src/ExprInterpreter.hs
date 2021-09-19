@@ -24,7 +24,13 @@ data LoxValue
   | LoxValueNil
   | LoxValueBool Bool
   | LoxValueIdentifier T.Text
+  | LoxValueSentinel -- This is more for the interpreter to return from statements
   deriving (Show, Eq)
+
+isTruthy :: LoxValue -> Bool
+isTruthy LoxValueNil = False
+isTruthy (LoxValueBool x) = x
+isTruthy _ = True
 
 -- type Env = M.Map T.Text LoxValue
 
@@ -57,7 +63,6 @@ updateEnv k v s = go (Just s)
 insertEnv :: T.Text -> LoxValue -> Env -> Env
 insertEnv k v s@Env {..} = s {env = M.insert k v env}
 
-type InterpreterT = ExceptT T.Text (State Env) LoxValue
 
 showLoxValue :: LoxValue -> String
 showLoxValue (LoxValueString t) = show t
@@ -65,40 +70,20 @@ showLoxValue (LoxValueDouble t) = show t
 showLoxValue LoxValueNil = "nil"
 showLoxValue (LoxValueBool b) = show b
 showLoxValue (LoxValueIdentifier b) = show b
+showLoxValue LoxValueSentinel = ""
 
--- unpackIdentifier :: LoxValue -> LoxValue -> ExceptT T.Text (State Env) (LoxValue, LoxValue)
--- unpackIdentifier (LoxValueIdentifier x) (LoxValueIdentifier y) = do
---   s <- get
---   let v1 = M.lookup x s
---   let v2 = M.lookup y s
---   case (v1, v2) of
---     (Just v1', Just v2') -> lift . return $ (v1', v2')
---     (_, Nothing) -> ExceptT . return $ Left $ "Unknown var" <> y
---     (Nothing, _) -> ExceptT . return $ Left $ "Unknown var" <> x
--- unpackIdentifier (LoxValueIdentifier x) y = do
---   s <- get
---   let v1 = M.lookup x s
---   case v1 of
---     Just v' -> lift . return $ (v', y)
---     Nothing -> ExceptT . return $ Left $ "Unknown var" <> x
--- unpackIdentifier x (LoxValueIdentifier y) = do
---   s <- get
---   let v1 = M.lookup y s
---   case v1 of
---     Just v' -> lift . return $ (x, v')
---     Nothing -> ExceptT . return $ Left $ "Unknown var" <> y
--- unpackIdentifier x y = lift . return $ (x, y)
-
-unpackIdent :: LoxValue -> InterpreterT
+unpackIdent :: LoxValue -> InterpreterTIO
 unpackIdent (LoxValueIdentifier x) = do
   s <- get
   let v1 = lookupEnv x s
   case v1 of
     Just v' -> lift . return $ v'
-    Nothing -> ExceptT . return $ Left $ "Unknown var" <> x
+    Nothing -> ExceptT . return $ Left $ "Unknown var: " <> x
 unpackIdent x = lift . return $ x
 
-applyOpToDouble :: LoxValue -> LoxValue -> BinOp -> (Double -> Double -> Double) -> InterpreterT
+type InterpreterTIO = ExceptT T.Text (StateT Env IO) LoxValue
+
+applyOpToDouble :: LoxValue -> LoxValue -> BinOp -> (Double -> Double -> Double) -> InterpreterTIO
 applyOpToDouble (LoxValueDouble x) (LoxValueDouble y) bop op = lift . return $ LoxValueDouble $ op x y
 applyOpToDouble x y bop _ = ExceptT . return $ Left value
   where
@@ -110,7 +95,7 @@ applyOpToDouble x y bop _ = ExceptT . return $ Left value
           ++ show x
           ++ " and "
           ++ show y
-applyCompOpToDouble :: LoxValue -> LoxValue -> BinOp -> (Double -> Double -> Bool) -> InterpreterT
+applyCompOpToDouble :: LoxValue -> LoxValue -> BinOp -> (Double -> Double -> Bool) -> InterpreterTIO
 applyCompOpToDouble (LoxValueDouble x) (LoxValueDouble y) bop op = lift . return $ LoxValueBool $ op x y
 applyCompOpToDouble x y bop _ = ExceptT . return $ Left value
   where
@@ -124,11 +109,12 @@ applyCompOpToDouble x y bop _ = ExceptT . return $ Left value
           ++ show y
 
 
-interpret :: Expr -> InterpreterT
+
+interpret :: Expr -> InterpreterTIO
 interpret (Number x) = lift $ return $ LoxValueDouble x
 interpret (Literal t) = lift $ return $ LoxValueString t
 interpret (LoxBool t) = lift $ return $ LoxValueBool t
-interpret LoxNil    = lift $ return LoxValueNil
+interpret LoxNil = lift $ return LoxValueNil
 interpret (Paren expr) = interpret expr
 interpret (Identifier i) = do
   s <- get
@@ -141,7 +127,7 @@ interpret (Unary op expr) = do
   case op of
     UnaryMinus -> case value of
       (LoxValueDouble d) -> lift $ return $ LoxValueDouble (-d)
-      d -> ExceptT . return . Left $ T.pack ("Unexpected type" ++ show d)
+      d -> ExceptT . return . Left $ T.pack ("Unexpected type: " ++ show d)
     UnaryBang -> case value of
       LoxValueNil -> lift . return $ LoxValueBool True
       LoxValueBool b -> lift .return $ LoxValueBool (not b)
@@ -178,65 +164,84 @@ interpret (Assignment lhs rhs) = do
     Just s'' -> do
       put $ s''
       lift . return  $ lox_value
-    Nothing -> ExceptT . return . Left $ "Assignment to variable before declaration " <> lhs
+    Nothing -> ExceptT . return . Left $ "Assignment to variable before declaration :" <> lhs
 
+interpret (Logical expr1 op expr2) = do
+  result <- interpret expr1
+  case (op, isTruthy result) of
+    (Or, True) -> return result
+    (And, False) -> return result
+    _ -> interpret expr2
 
-interpretStmt :: Statement -> Env -> IO (Env, Maybe T.Text)
-interpretStmt (StmtExpr expr) s = do
-  let (result, s') = runState (runExceptT (interpret expr)) s
-  case result of
-    Right _ -> return (s', Nothing)
-    Left e -> do
-      print e
-      return (s', Just e)
+interpretStmt :: Statement -> InterpreterTIO
+interpretStmt (StmtExpr expr) = do
+  result <- interpret expr
+  modify (insertEnv "_" result)
+  return result
 
-interpretStmt (StmtPrint expr) s = do
-  let (result, s') = runState (runExceptT (interpret expr)) s
-  case result of
-    Right x -> do
-      putStrLn $ showLoxValue x
-      return (s', Nothing)
-    Left x -> do
-      let msg = "Unexpected error" <> x
-      print msg
-      return (s', Just msg)
+interpretStmt (StmtPrint expr) = do
+  result <- interpret expr
+  liftIO $ putStrLn $ showLoxValue result
+  return LoxValueSentinel  -- For now let print return this
 
-interpretDeclaration :: Declaration -> Env -> IO (Env, Maybe T.Text)
-interpretDeclaration (DeclVar (Decl var (Just expr))) s = do
-  let (result, s') = runState (runExceptT (interpret expr)) s
-  case result of
-        Right r -> do
-          -- print $ "setting value of " <> var <> " to " <> T.pack (show r)
-          return $ (insertEnv var r s', Nothing)
-        _ -> do
-          let msg = "Error during declaration of" <> var
-          -- print msg
-          return (s', Just msg)
-
-interpretDeclaration (DeclVar (Decl var Nothing)) s = do
-  return (insertEnv var LoxValueNil s, Nothing)
-
-interpretDeclaration (DeclStatement stmt) s = interpretStmt stmt s
-
-interpretDeclaration (DeclBlock program) s = do
+interpretStmt (StmtBlock program) = do
+  s <- get
   let s' = initEnv (Just s)
-  (s'', msg) <- interpretProgram program s'
+  put s'
+  result <- interpretProgram program
+  s'' <- get
   case parent s'' of
-    Just p ->  return (p, msg)
-    Nothing -> return (s', Just "Unexpected state of environment where parent is missing from passed in child")
+    Just p ->  do
+      put p
+      return result
+    Nothing -> do
+      let msg = "Unexpected state of environment where parent is missing from passed in child"
+      liftIO $ print msg
+      ExceptT . return . Left $ msg
 
 
-interpretProgram :: Program -> Env -> IO (Env, Maybe T.Text)
-interpretProgram (decl : decls) s = go
+interpretStmt (StmtIf (IfElse cond ifexpr elseexpr)) = do
+  cond_result <- interpret cond
+  if isTruthy cond_result
+    then interpretStmt ifexpr
+    else maybe (return LoxValueNil) interpretStmt elseexpr
+
+interpretStmt (StmtWhile (While cond stmt)) = go
   where
     go = do
-      (s', msg) <- interpretDeclaration decl s
-      case msg of
-        Just msg' -> return (s', Just msg')
-        Nothing -> do
-          (s'', msg'') <- interpretProgram decls s'
-          return (s'', msg'')
-interpretProgram [] env = return (env, Nothing)
+      cond_result <- interpret cond
+      if isTruthy cond_result then  do
+        void $ interpretStmt stmt
+        go
+        else return LoxValueSentinel
+
+
+-- interpretDeclaration :: Declaration -> Env -> IO (Env, Maybe T.Text)
+interpretDeclaration :: Declaration -> InterpreterTIO
+interpretDeclaration (DeclVar (Decl var (Just expr))) = do
+  result <- interpret expr
+  s <- get
+  let s' = insertEnv var result s
+  put s'
+  return LoxValueSentinel
+
+interpretDeclaration (DeclVar (Decl var Nothing)) = do
+  s <- get
+  put (insertEnv var LoxValueNil s)
+  return LoxValueSentinel
+
+interpretDeclaration (DeclStatement stmt) = interpretStmt stmt
+
+interpretProgram :: Program -> InterpreterTIO
+interpretProgram (decl : decls) = go
+  where
+    go = do
+      result <- interpretDeclaration decl
+      case result of
+        LoxValueSentinel -> return ()
+        _ -> liftIO $ print result
+      interpretProgram decls
+interpretProgram [] = return LoxValueSentinel
 
 runScript :: T.Text -> IO ()
 runScript script = do
@@ -246,10 +251,11 @@ runScript script = do
       let ast = P.parse loxProgram "" lex
       case ast of
         Right ast' -> do
-          (_, msg) <- interpretProgram ast' (initEnv Nothing)
-          when (isJust msg) $ print msg
-        Left e -> print $ "Scanner error" <> show e
-    Left e -> print $ "Lexer error" <> show e
+          let w = runExceptT (interpretProgram ast')
+          (result, _) <- runStateT w (initEnv Nothing)
+          print (result , ast')
+        Left e -> print $ "Parser error: " <> show e
+    Left e -> print $ "Lexer error: " <> show e
 
 
 type HaskellLineT = InputT (StateT Env IO) ()
@@ -268,50 +274,14 @@ runScriptInteractive = runStateT (runInputT defaultSettings loop) (initEnv Nothi
           let ast = P.parse loxProgram "" lex
           case ast of
             Right ast' -> do
-              (env', msg) <- liftIO $ interpretProgram ast' env
-              when (isJust msg) $ liftIO $ print msg
+              let w = runExceptT (interpretProgram ast')
+              (result, env') <- liftIO $ runStateT w env
+              -- liftIO $ print result
               lift $ put env'
               loop
             Left e -> do
-              liftIO $ print $ "Scanner error" <> show e
+              liftIO $ putStrLn $ "Parser error: " <> show e
               loop
         Left e -> do
-          liftIO $ print $ "Lexer error" <> show e
+          liftIO $ putStrLn $ "Lexer error: " <> show e
           loop
-
--- runScriptInteractive = runInputT defaultSettings loop
---   where
---     loop :: InputT IO ()
---     loop = do
---       minput <- getInputLine "% "
---       case minput of
---         Nothing -> return ()
---         Just "quit" -> return ()
---         Just input -> do outputStrLn $ "Input was: " ++ input
---                          loop
-
-
--- runScriptInteractive :: IO ()
--- runScriptInteractive = do
---   System.IO.hSetEcho stdin False
---   putStrLn "Starting lox interactive prompt"
---   go (initEnv Nothing)
---   where
---     go env = do
---       putStr "lox> "
---       line <- getLine
---       print line
---       when (line == "") (go env)
---       let lex_result = scanner line
---       case lex_result of
---         Right lex -> do
---           let ast = P.parse loxProgram "" lex
---           case ast of
---             Right ast' -> do
---               (env', msg) <- interpretProgram ast' env
---               when (isJust msg) $ print msg
---               go env'
---             Left e -> do
---               print $ "Scanner error" <> show e
---               go env
---         Left e -> print $ "Lexer error" <> show e

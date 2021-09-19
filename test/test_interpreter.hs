@@ -17,34 +17,35 @@ test_interpreter input expected = testCase input $ do
   --let result = either (const LoxValueNil) $
   let x = P.parse equality "" $ fromRight [] (scanner input)
   -- let result = interpret $ fromRight LoxNil x
-  let (result, _) = runState (runExceptT (interpret $ fromRight LoxNil x)) (initEnv Nothing)
+  (result, _) <- liftIO $ runStateT (runExceptT (interpret $ fromRight LoxNil x)) (initEnv Nothing)
   expected @=? result
 
 -- with this function we add back the final result of the script into the env and test the value of tat variable
 test_program input lookup_key expected = testCase input $ do
   --let result = either (const LoxValueNil) $
   let x = fromRight [] $ P.parse loxProgram "" $ fromRight [] (scanner input)
-  (env, msg) <- interpretProgram x (initEnv Nothing)
+  (lox_result, env) <- liftIO $ runStateT (runExceptT (interpretProgram x)) (initEnv Nothing)
   -- print $ show env
   -- print $ show msg
   let result = lookupEnv lookup_key env
   case result of
     Just x' -> expected @=? x'
-    Nothing -> assertFailure $ show msg ++ show env
+    Nothing -> assertFailure $ show lox_result ++ show env
 
 
 test_program_error input expected = testCase input $ do
   --let result = either (const LoxValueNil) $
   let x = fromRight [] $ P.parse loxProgram "" $ fromRight [] (scanner input)
-  (env, msg) <- interpretProgram x (initEnv Nothing)
-  case msg of
-    Just msg' -> expected @=? msg'
-    Nothing -> assertFailure $ show env
+  (result, _) <- liftIO $ runStateT (runExceptT (interpretProgram x)) (initEnv Nothing)
+  -- case msg of
+  --   Just msg' -> expected @=? msg'
+  --   Nothing -> assertFailure $ show env
+  assertBool input (isLeft result)
 
 test_errors input = testCase input $ do
   --let result = either (const LoxValueNil) $
   let x = P.parse equality "" $ fromRight [] (scanner input)
-  let (result, _) = runState (runExceptT (interpret $ fromRight LoxNil x)) (initEnv Nothing)
+  (result, _) <- liftIO $ runStateT (runExceptT (interpret $ fromRight LoxNil x)) (initEnv Nothing)
   assertBool input (isLeft result)
 
 
@@ -104,7 +105,29 @@ test_interpreters = [
   -- test block
   test_program "var a=10; var b=20; var result; {var b=100; result=b+a; print result;};" "result" (LoxValueDouble 110.0),
 
-  test_program "var a=10; var b=20; var result; {var b=100; result=b+a;} result=a+b;print result;" "result" (LoxValueDouble 30.0)
+  test_program "var a=10; var b=20; var result; {var b=100; result=b+a;} result=a+b;print result;" "result" (LoxValueDouble 30.0),
+
+  -- ifelse conditions
+  test_program "var a=10;var result;if (a!=10) {result=10;} else {result=20;} print result;" "result" (LoxValueDouble 20.0),
+
+  test_program "var a=10;var result;if (a==10) {result=100;} else {result=20;} print result;" "result" (LoxValueDouble 100.0),
+
+
+    test_program "var result=true and true;" "result" (LoxValueBool True),
+    test_program "var result=true and false;" "result" (LoxValueBool False),
+    test_program "var result=false and false;" "result" (LoxValueBool False),
+    test_program "var result=false and true;" "result" (LoxValueBool False),
+
+    test_program "var result=true or true;" "result" (LoxValueBool True),
+    test_program "var result=true or false;" "result" (LoxValueBool True),
+    test_program "var result=false or false;" "result" (LoxValueBool False),
+    test_program "var result=false or true;" "result" (LoxValueBool True),
+
+    -- check precdence
+    test_program "var result=false or true and true;" "result" (LoxValueBool True),
+    test_program "var result=true or true and false;" "result" (LoxValueBool True),
+
+    test_program "var result=0; while(result<10) {result=result+1;}" "result" (LoxValueDouble 10.0)
 
   ]
 
