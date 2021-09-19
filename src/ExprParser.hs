@@ -294,7 +294,7 @@ loxDeclarations :: Parser Declaration
 loxDeclarations = try loxDeclaration  <|> DeclStatement <$> loxStatement
 
 loxProgram :: Parser Program
-loxProgram = many loxDeclarations -- endBy1 loxDeclarations semi
+loxProgram = many1 loxDeclarations -- endBy1 loxDeclarations semi
 
 scannerLoxTokens :: [LoxTokInfo] -> LoxParserResult
 scannerLoxTokens = parse loxExpr ""

@@ -237,8 +237,8 @@ runScript script = do
         Right ast' -> do
           let w = runExceptT (interpretProgram ast')
           (result, _) <- runStateT w (initEnv Nothing)
-          print result
-        Left e -> print $ "Scanner error: " <> show e
+          print (result , ast')
+        Left e -> print $ "Parser error: " <> show e
     Left e -> print $ "Lexer error: " <> show e
 
 
@@ -264,8 +264,8 @@ runScriptInteractive = runStateT (runInputT defaultSettings loop) (initEnv Nothi
               lift $ put env'
               loop
             Left e -> do
-              liftIO $ print $ "Scanner error: " <> show e
+              liftIO $ putStrLn $ "Parser error: " <> show e
               loop
         Left e -> do
-          liftIO $ print $ "Lexer error: " <> show e
+          liftIO $ putStrLn $ "Lexer error: " <> show e
           loop
