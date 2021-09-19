@@ -40,6 +40,8 @@ data BinOp = NotEqual | EqualEqual | Gt | Gte | Lt | Lte | Plus | Minus | Star |
 
 data UnaryOp = UnaryMinus | UnaryBang deriving (Show, Eq)
 
+data LogicOp = And | Or deriving (Show, Eq)
+
 type Program = [Declaration]
 
 data Declaration = DeclVar Decl | DeclStatement Statement  deriving (Show, Eq)
@@ -60,6 +62,7 @@ data Expr
   | Unary UnaryOp Expr
   | Binary Expr BinOp Expr
   | Assignment T.Text Expr
+  | Logical Expr LogicOp Expr
   deriving (Show, Eq)
 
 -- satisfy = tokenPrim (t -> String) (SourcePos -> t -> s -> SourcePos) (t -> Maybe a)
@@ -90,6 +93,18 @@ leftChain p op = do
       op' <- op
       e1 <- p
       maybeAddSuffix (Binary e0 op' e1)
+
+    maybeAddSuffix e = addSuffix e <|> return e
+
+leftChainLogic :: Parser Expr -> Parser LogicOp -> Parser Expr
+leftChainLogic p op = do
+  expr <- p
+  maybeAddSuffix expr
+  where
+    addSuffix e0 = do
+      op' <- op
+      e1 <- p
+      maybeAddSuffix (Logical e0 op' e1)
 
     maybeAddSuffix e = addSuffix e <|> return e
 
@@ -202,7 +217,22 @@ assignment = do
     identifier _ = Nothing
 
 loxExpr :: Parser Expr
-loxExpr = try assignment <|> equality
+loxExpr = try assignment <|> loxLogicOr
+
+loxLogicOr :: Parser Expr
+loxLogicOr = leftChainLogic loxLogicAnd (satisfyT f)
+  where
+    f x = case tokinfo_type x of
+      OR -> Just Or
+      _ -> Nothing
+
+loxLogicAnd :: Parser Expr
+loxLogicAnd = leftChainLogic equality (satisfyT f)
+  where
+    f x = case tokinfo_type x of
+      AND -> Just And
+      _ -> Nothing
+
 
 semi :: Parser ()
 semi = satisfyT f
