@@ -27,6 +27,11 @@ data LoxValue
   | LoxValueSentinel -- This is more for the interpreter to return from statements
   deriving (Show, Eq)
 
+isTruthy :: LoxValue -> Bool
+isTruthy LoxValueNil = False
+isTruthy (LoxValueBool x) = x
+isTruthy _ = True
+
 -- type Env = M.Map T.Text LoxValue
 
 data Env = Env {
@@ -77,8 +82,6 @@ unpackIdent (LoxValueIdentifier x) = do
 unpackIdent x = lift . return $ x
 
 type InterpreterTIO = ExceptT T.Text (StateT Env IO) LoxValue
-
-
 
 applyOpToDouble :: LoxValue -> LoxValue -> BinOp -> (Double -> Double -> Double) -> InterpreterTIO
 applyOpToDouble (LoxValueDouble x) (LoxValueDouble y) bop op = lift . return $ LoxValueDouble $ op x y
@@ -163,6 +166,13 @@ interpret (Assignment lhs rhs) = do
       lift . return  $ lox_value
     Nothing -> ExceptT . return . Left $ "Assignment to variable before declaration :" <> lhs
 
+interpret (Logical expr1 op expr2) = do
+  result <- interpret expr1
+  case (op, isTruthy result) of
+    (Or, True) -> return result
+    (And, False) -> return result
+    _ -> interpret expr2
+
 interpretStmt :: Statement -> InterpreterTIO
 interpretStmt (StmtExpr expr) = do
   result <- interpret expr
@@ -189,16 +199,12 @@ interpretStmt (StmtBlock program) = do
       liftIO $ print msg
       ExceptT . return . Left $ msg
 
+
 interpretStmt (StmtIf (IfElse cond ifexpr elseexpr)) = do
   cond_result <- interpret cond
-  if is_truthy cond_result
+  if isTruthy cond_result
     then interpretStmt ifexpr
     else maybe (return LoxValueNil) interpretStmt elseexpr
-  where
-    is_truthy LoxValueNil = False
-    is_truthy (LoxValueBool x) = x
-    is_truthy _ = True
-
 
 -- interpretDeclaration :: Declaration -> Env -> IO (Env, Maybe T.Text)
 interpretDeclaration :: Declaration -> InterpreterTIO

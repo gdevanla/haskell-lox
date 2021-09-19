@@ -110,8 +110,22 @@ test_interpreters = [
   -- ifelse conditions
   test_program "var a=10;var result;if (a!=10) {result=10;} else {result=20;} print result;" "result" (LoxValueDouble 20.0),
 
-  test_program "var a=10;var result;if (a==10) {result=100;} else {result=20;} print result;" "result" (LoxValueDouble 100.0)
+  test_program "var a=10;var result;if (a==10) {result=100;} else {result=20;} print result;" "result" (LoxValueDouble 100.0),
 
+
+    test_program "var result=true and true;" "result" (LoxValueBool True),
+    test_program "var result=true and false;" "result" (LoxValueBool False),
+    test_program "var result=false and false;" "result" (LoxValueBool False),
+    test_program "var result=false and true;" "result" (LoxValueBool False),
+
+    test_program "var result=true or true;" "result" (LoxValueBool True),
+    test_program "var result=true or false;" "result" (LoxValueBool True),
+    test_program "var result=false or false;" "result" (LoxValueBool False),
+    test_program "var result=false or true;" "result" (LoxValueBool True),
+
+    -- check precdence
+    test_program "var result=false or true and true;" "result" (LoxValueBool True),
+    test_program "var result=true or true and false;" "result" (LoxValueBool True)
 
   ]
 
