@@ -24,6 +24,7 @@ data LoxValue
   | LoxValueNil
   | LoxValueBool Bool
   | LoxValueIdentifier T.Text
+  | LoxValueSentinel -- This is more for the interpreter to return from statements
   deriving (Show, Eq)
 
 -- type Env = M.Map T.Text LoxValue
@@ -57,7 +58,6 @@ updateEnv k v s = go (Just s)
 insertEnv :: T.Text -> LoxValue -> Env -> Env
 insertEnv k v s@Env {..} = s {env = M.insert k v env}
 
-type InterpreterT = ExceptT T.Text (StateT Env IO) LoxValue
 
 showLoxValue :: LoxValue -> String
 showLoxValue (LoxValueString t) = show t
@@ -65,17 +65,22 @@ showLoxValue (LoxValueDouble t) = show t
 showLoxValue LoxValueNil = "nil"
 showLoxValue (LoxValueBool b) = show b
 showLoxValue (LoxValueIdentifier b) = show b
+showLoxValue LoxValueSentinel = ""
 
-unpackIdent :: LoxValue -> InterpreterT
+unpackIdent :: LoxValue -> InterpreterTIO
 unpackIdent (LoxValueIdentifier x) = do
   s <- get
   let v1 = lookupEnv x s
   case v1 of
     Just v' -> lift . return $ v'
-    Nothing -> ExceptT . return $ Left $ "Unknown var" <> x
+    Nothing -> ExceptT . return $ Left $ "Unknown var: " <> x
 unpackIdent x = lift . return $ x
 
-applyOpToDouble :: LoxValue -> LoxValue -> BinOp -> (Double -> Double -> Double) -> InterpreterT
+type InterpreterTIO = ExceptT T.Text (StateT Env IO) LoxValue
+
+
+
+applyOpToDouble :: LoxValue -> LoxValue -> BinOp -> (Double -> Double -> Double) -> InterpreterTIO
 applyOpToDouble (LoxValueDouble x) (LoxValueDouble y) bop op = lift . return $ LoxValueDouble $ op x y
 applyOpToDouble x y bop _ = ExceptT . return $ Left value
   where
@@ -87,7 +92,7 @@ applyOpToDouble x y bop _ = ExceptT . return $ Left value
           ++ show x
           ++ " and "
           ++ show y
-applyCompOpToDouble :: LoxValue -> LoxValue -> BinOp -> (Double -> Double -> Bool) -> InterpreterT
+applyCompOpToDouble :: LoxValue -> LoxValue -> BinOp -> (Double -> Double -> Bool) -> InterpreterTIO
 applyCompOpToDouble (LoxValueDouble x) (LoxValueDouble y) bop op = lift . return $ LoxValueBool $ op x y
 applyCompOpToDouble x y bop _ = ExceptT . return $ Left value
   where
@@ -101,7 +106,8 @@ applyCompOpToDouble x y bop _ = ExceptT . return $ Left value
           ++ show y
 
 
-interpret :: Expr -> InterpreterT
+
+interpret :: Expr -> InterpreterTIO
 interpret (Number x) = lift $ return $ LoxValueDouble x
 interpret (Literal t) = lift $ return $ LoxValueString t
 interpret (LoxBool t) = lift $ return $ LoxValueBool t
@@ -118,7 +124,7 @@ interpret (Unary op expr) = do
   case op of
     UnaryMinus -> case value of
       (LoxValueDouble d) -> lift $ return $ LoxValueDouble (-d)
-      d -> ExceptT . return . Left $ T.pack ("Unexpected type" ++ show d)
+      d -> ExceptT . return . Left $ T.pack ("Unexpected type: " ++ show d)
     UnaryBang -> case value of
       LoxValueNil -> lift . return $ LoxValueBool True
       LoxValueBool b -> lift .return $ LoxValueBool (not b)
@@ -155,18 +161,18 @@ interpret (Assignment lhs rhs) = do
     Just s'' -> do
       put $ s''
       lift . return  $ lox_value
-    Nothing -> ExceptT . return . Left $ "Assignment to variable before declaration " <> lhs
-
-
-type InterpreterTIO = ExceptT T.Text (StateT Env IO) LoxValue
+    Nothing -> ExceptT . return . Left $ "Assignment to variable before declaration :" <> lhs
 
 interpretStmt :: Statement -> InterpreterTIO
-interpretStmt (StmtExpr expr) = interpret expr
+interpretStmt (StmtExpr expr) = do
+  result <- interpret expr
+  modify (insertEnv "_" result)
+  return result
 
 interpretStmt (StmtPrint expr) = do
   result <- interpret expr
   liftIO $ putStrLn $ showLoxValue result
-  return LoxValueNil  -- For now let print return this
+  return LoxValueSentinel  -- For now let print return this
 
 interpretStmt (StmtBlock program) = do
   s <- get
@@ -178,7 +184,10 @@ interpretStmt (StmtBlock program) = do
     Just p ->  do
       put p
       return result
-    Nothing -> ExceptT . return . Left $ "Unexpected state of environment where parent is missing from passed in child"
+    Nothing -> do
+      let msg = "Unexpected state of environment where parent is missing from passed in child"
+      liftIO $ print msg
+      ExceptT . return . Left $ msg
 
 interpretStmt (StmtIf (IfElse cond ifexpr elseexpr)) = do
   cond_result <- interpret cond
@@ -198,12 +207,12 @@ interpretDeclaration (DeclVar (Decl var (Just expr))) = do
   s <- get
   let s' = insertEnv var result s
   put s'
-  return LoxValueNil
+  return LoxValueSentinel
 
 interpretDeclaration (DeclVar (Decl var Nothing)) = do
   s <- get
   put (insertEnv var LoxValueNil s)
-  return LoxValueNil
+  return LoxValueSentinel
 
 interpretDeclaration (DeclStatement stmt) = interpretStmt stmt
 
@@ -211,9 +220,12 @@ interpretProgram :: Program -> InterpreterTIO
 interpretProgram (decl : decls) = go
   where
     go = do
-      void $ interpretDeclaration decl
+      result <- interpretDeclaration decl
+      case result of
+        LoxValueSentinel -> return ()
+        _ -> liftIO $ print result
       interpretProgram decls
-interpretProgram [] = return LoxValueNil
+interpretProgram [] = return LoxValueSentinel
 
 runScript :: T.Text -> IO ()
 runScript script = do
@@ -226,8 +238,8 @@ runScript script = do
           let w = runExceptT (interpretProgram ast')
           (result, _) <- runStateT w (initEnv Nothing)
           print result
-        Left e -> print $ "Scanner error" <> show e
-    Left e -> print $ "Lexer error" <> show e
+        Left e -> print $ "Scanner error: " <> show e
+    Left e -> print $ "Lexer error: " <> show e
 
 
 type HaskellLineT = InputT (StateT Env IO) ()
@@ -248,12 +260,12 @@ runScriptInteractive = runStateT (runInputT defaultSettings loop) (initEnv Nothi
             Right ast' -> do
               let w = runExceptT (interpretProgram ast')
               (result, env') <- liftIO $ runStateT w env
-              liftIO $ print result
+              -- liftIO $ print result
               lift $ put env'
               loop
             Left e -> do
-              liftIO $ print $ "Scanner error" <> show e
+              liftIO $ print $ "Scanner error: " <> show e
               loop
         Left e -> do
-          liftIO $ print $ "Lexer error" <> show e
+          liftIO $ print $ "Lexer error: " <> show e
           loop
