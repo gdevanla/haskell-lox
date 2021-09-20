@@ -47,7 +47,9 @@ data LogicOp = And | Or deriving (Show, Eq)
 
 type Program = [Declaration]
 
-data Declaration = DeclVar Decl | DeclStatement Statement  deriving (Show, Eq)
+data Declaration = DeclFun Func | DeclVar Decl | DeclStatement Statement  deriving (Show, Eq)
+
+data Func = Func T.Text [T.Text] [Declaration]  deriving (Show, Eq)
 
 data Decl = Decl T.Text (Maybe Expr)  deriving (Show, Eq)
 
@@ -189,25 +191,15 @@ call = do
       in
       LoxSourcePos (sourceLine sc) (sourceColumn sc)
 
-
 funcCall :: Parser ([Expr], LoxTokInfo)
 funcCall = do
   void $ satisfyT open_paren
   arguments <- loxArguments
   close_tok <- satisfyT close_paren
   return (arguments, close_tok)
-  where
-    open_paren x = case tokinfo_type x of
-      LEFT_PAREN -> Just x
-      _ -> Nothing
-
-    close_paren x = case tokinfo_type x of
-     RIGHT_PAREN -> Just x
-     _ -> Nothing
 
 loxArguments :: Parser [Expr]
 loxArguments = sepBy loxExpr comma -- skipping validation of max argument count
-
 factor :: Parser Expr
 factor = leftChain unary (satisfyT f)
   where
@@ -289,6 +281,16 @@ comma = satisfyT f
       COMMA -> Just ()
       _ -> Nothing
 
+open_paren ::LoxTokInfo ->  Maybe LoxTokInfo
+open_paren x = case tokinfo_type x of
+  LEFT_PAREN -> Just x
+  _ -> Nothing
+
+close_paren :: LoxTokInfo -> Maybe LoxTokInfo
+close_paren x = case tokinfo_type x of
+  RIGHT_PAREN -> Just x
+  _ -> Nothing
+
 loxPrintStmt :: Parser Expr
 loxPrintStmt = do
   void $ satisfyT f
@@ -335,12 +337,12 @@ loxStatement :: Parser Statement
 loxStatement = StmtExpr <$> (try loxExpr <* semi) <|> StmtPrint <$> (try loxPrintStmt <* semi) <|> try ifStmt <|> try whileStmt <|> loxBlock
 
 
-loxBlock :: Parser Statement
-loxBlock = do
+loxBlock' :: Parser [Declaration]
+loxBlock' = do
   void $ satisfyT left_brace
   prog <- loxProgram
   void $ satisfyT right_brace
-  return $ StmtBlock prog
+  return $ prog
   where
     left_brace x = case tokinfo_type x of
       LEFT_BRACE -> Just ()
@@ -350,6 +352,10 @@ loxBlock = do
       RIGHT_BRACE -> Just ()
       _ -> Nothing
 
+loxBlock :: Parser Statement
+loxBlock = do
+  prog <- loxBlock'
+  return $ StmtBlock prog
 
 loxDeclStatment :: Parser Declaration
 loxDeclStatment = DeclStatement <$> loxStatement
@@ -366,7 +372,7 @@ loxAssignment = do
 loxDeclaration :: Parser Declaration
 loxDeclaration = do
   void $ satisfyT f
-  var_name <- satisfyT fi
+  var_name <- identifier
   expr <- optionMaybe loxAssignment
   void semi
   return $ DeclVar $ Decl var_name expr
@@ -375,6 +381,27 @@ loxDeclaration = do
       VAR -> Just ()
       _ -> Nothing
 
+loxFuncDecl :: Parser Declaration
+loxFuncDecl = do
+  void $ satisfyT func_keyword
+  func_name <- identifier
+  void $ satisfyT open_paren
+  params <- parameters
+  void $ satisfyT close_paren
+  func_body <- loxBlock'
+  return $ DeclFun $ Func func_name params func_body
+  where
+    func_keyword x = case tokinfo_type x of
+      FUN -> Just ()
+      _ -> Nothing
+
+    parameters :: Parser [T.Text]
+    parameters = sepBy identifier comma -- skipping validation of max argument count
+
+
+identifier :: Parser T.Text
+identifier = satisfyT fi
+  where
     fi x = case tokinfo_type x of
       IDENTIFIER ix -> Just (T.pack ix)
       _ -> Nothing
