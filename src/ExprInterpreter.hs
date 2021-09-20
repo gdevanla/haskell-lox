@@ -14,7 +14,7 @@ import Control.Monad.Except
 import Data.Map.Strict as M
 import Control.Monad.State.Strict
 import Data.Maybe
-import Scanner (scanner)
+import Scanner as S
 import qualified Text.Parsec as P
 import qualified Control.Monad
 import System.Console.Haskeline
@@ -174,9 +174,14 @@ interpret (Assignment lhs rhs) = do
   s <- get
   lox_value <- interpret rhs
   s' <- get  -- need to get an s after all rhs are processed
+  liftIO $ putStrLn "in assignment"
+  liftIO $ putStrLn $ show lox_value
+  liftIO $ putStrLn $ show s'
+  liftIO $ putStrLn $ show $ updateEnv lhs lox_value s'
   case updateEnv lhs lox_value s' of
     Just s'' -> do
       put $ s''
+      liftIO $ putStrLn $ show s''
       lift . return  $ lox_value
     Nothing -> ExceptT . return . Left $ "Assignment to variable before declaration :" <> lhs
 
@@ -195,8 +200,7 @@ interpret (Call expr arguments _) = do
       let pa = L.zip params args
       s' <- get
       put $ multiInsertEnv pa (initEnv (Just s'))
-      void $ interpretProgram block
-      return LoxValueSentinel
+      interpretProgram block
     _ -> ExceptT . return . Left $ "Function not callable: " <> T.pack (show callee)
 
 interpretStmt :: Statement -> InterpreterTIO
@@ -241,6 +245,12 @@ interpretStmt (StmtWhile (While cond stmt)) = go
         go
         else return LoxValueSentinel
 
+interpretStmt (StmtReturn (Just expr)) = do
+  result <- interpret expr
+  -- liftIO $ putStrLn "Returning result"
+  -- liftIO $ putStrLn $ show result
+  return $ LoxValueReturn result
+interpretStmt (StmtReturn Nothing) = return $ LoxValueReturn $ LoxValueDouble 9999.0
 
 -- interpretDeclaration :: Declaration -> Env -> IO (Env, Maybe T.Text)
 interpretDeclaration :: Declaration -> InterpreterTIO
@@ -271,9 +281,8 @@ interpretProgram (decl : decls) = go
     go = do
       result <- interpretDeclaration decl
       case result of
-        LoxValueSentinel -> return ()
-        _ -> liftIO $ print result
-      interpretProgram decls
+        LoxValueReturn x -> return x
+        _ -> if L.null decls then return result else  interpretProgram decls
 interpretProgram [] = return LoxValueSentinel
 
 runScript :: T.Text -> IO ()
@@ -281,15 +290,21 @@ runScript script = do
   let lex_result = scanner (T.unpack script)
   case lex_result of
     Right lex -> do
-      let ast = P.parse loxProgram "" lex
+      let ast = P.parse loxProgram "" (L.filter filter_comments lex)
       case ast of
         Right ast' -> do
           let w = runExceptT (interpretProgram ast')
           (result, _) <- runStateT w (initEnv Nothing)
-          -- print (result , ast')
-          return ()
-        Left e -> print $ "Parser error: " <> show e
-    Left e -> print $ "Lexer error: " <> show e
+          -- putStrLn $ show (result , ast')
+          case result of
+            Left e -> putStrLn $ show e
+            _ -> return ()
+        Left e -> putStrLn $ "Parser error: " <> show e
+    Left e -> putStrLn $ "Lexer error: " <> show e
+  where
+    filter_comments a = case tokinfo_type a of
+      (S.COMMENT _) -> False
+      _ -> True
 
 
 type HaskellLineT = InputT (StateT Env IO) ()
@@ -311,6 +326,9 @@ runScriptInteractive = runStateT (runInputT defaultSettings loop) (initEnv Nothi
               let w = runExceptT (interpretProgram ast')
               (result, env') <- liftIO $ runStateT w env
               -- liftIO $ print result
+              case result of
+                Left e -> liftIO $ putStrLn $ show e
+                _ -> return ()
               lift $ put env'
               loop
             Left e -> do
