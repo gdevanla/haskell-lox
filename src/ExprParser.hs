@@ -193,9 +193,9 @@ call = do
 
 funcCall :: Parser ([Expr], LoxTokInfo)
 funcCall = do
-  void $ satisfyT open_paren
+  void $ satisfyT openParen
   arguments <- loxArguments
-  close_tok <- satisfyT close_paren
+  close_tok <- satisfyT closeParen
   return (arguments, close_tok)
 
 loxArguments :: Parser [Expr]
@@ -281,13 +281,13 @@ comma = satisfyT f
       COMMA -> Just ()
       _ -> Nothing
 
-open_paren ::LoxTokInfo ->  Maybe LoxTokInfo
-open_paren x = case tokinfo_type x of
+openParen ::LoxTokInfo ->  Maybe LoxTokInfo
+openParen x = case tokinfo_type x of
   LEFT_PAREN -> Just x
   _ -> Nothing
 
-close_paren :: LoxTokInfo -> Maybe LoxTokInfo
-close_paren x = case tokinfo_type x of
+closeParen :: LoxTokInfo -> Maybe LoxTokInfo
+closeParen x = case tokinfo_type x of
   RIGHT_PAREN -> Just x
   _ -> Nothing
 
@@ -385,9 +385,9 @@ loxFuncDecl :: Parser Declaration
 loxFuncDecl = do
   void $ satisfyT func_keyword
   func_name <- identifier
-  void $ satisfyT open_paren
+  void $ satisfyT openParen
   params <- parameters
-  void $ satisfyT close_paren
+  void $ satisfyT closeParen
   func_body <- loxBlock'
   return $ DeclFun $ Func func_name params func_body
   where
