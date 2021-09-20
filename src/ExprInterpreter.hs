@@ -7,6 +7,8 @@ import System.IO
 import Data.Text as T
 import Import hiding (many, try, (<|>))
 
+import Data.Time.Clock
+
 import ExprParser
 import Control.Monad.Except
 import Data.Map.Strict as M
@@ -17,6 +19,8 @@ import qualified Text.Parsec as P
 import qualified Control.Monad
 import System.Console.Haskeline
 
+-- data NativeFunction = Clock |
+
 -- https://www.seas.upenn.edu/~cis552/13fa/lectures/FunEnv.html
 data LoxValue
   = LoxValueString T.Text
@@ -25,6 +29,7 @@ data LoxValue
   | LoxValueBool Bool
   | LoxValueIdentifier T.Text
   | LoxValueSentinel -- This is more for the interpreter to return from statements
+  | LoxValueFunction [T.Text] [Declaration]  -- Hold on to the AST
   deriving (Show, Eq)
 
 isTruthy :: LoxValue -> Bool
@@ -172,6 +177,13 @@ interpret (Logical expr1 op expr2) = do
     (Or, True) -> return result
     (And, False) -> return result
     _ -> interpret expr2
+
+-- interpret (Call expr arguments _) = do
+--   callee <- interpret expr
+--   arguments <- mapM interpret arguments
+--   return _
+
+
 
 interpretStmt :: Statement -> InterpreterTIO
 interpretStmt (StmtExpr expr) = do
