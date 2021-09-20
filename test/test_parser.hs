@@ -102,7 +102,10 @@ test_statements = [
            ],
 
     test_statement "fun add(x1, y1) {result=x1+y1;print x1;}" $
-    Right [DeclFun (Func "add" ["x1", "y1"] [DeclStatement (StmtExpr (Assignment "result" (Binary (Identifier "x1") Plus (Identifier "y1")))), DeclStatement (StmtPrint (Identifier "x1"))])]
+    Right [DeclFun (Func "add" ["x1", "y1"] [DeclStatement (StmtExpr (Assignment "result" (Binary (Identifier "x1") Plus (Identifier "y1")))), DeclStatement (StmtPrint (Identifier "x1"))])],
+
+    test_statement "return (a+b);" $
+    Right [DeclStatement (StmtReturn (Just (Binary (Identifier "a") Plus (Identifier "b"))))]
 
   ]
 

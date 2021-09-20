@@ -54,7 +54,7 @@ data Func = Func T.Text [T.Text] [Declaration]  deriving (Show, Eq)
 data Decl = Decl T.Text (Maybe Expr)  deriving (Show, Eq)
 
 data Statement = StmtExpr Expr | StmtPrint Expr | StmtIf IfElse | StmtBlock [Declaration]
-  | StmtWhile While
+  | StmtWhile While | StmtReturn (Maybe Expr)
   deriving (Show, Eq)
 
 
@@ -200,6 +200,8 @@ funcCall = do
 
 loxArguments :: Parser [Expr]
 loxArguments = sepBy loxExpr comma -- skipping validation of max argument count
+
+
 factor :: Parser Expr
 factor = leftChain unary (satisfyT f)
   where
@@ -334,7 +336,7 @@ whileStmt = do
 
 
 loxStatement :: Parser Statement
-loxStatement = StmtExpr <$> (try loxExpr <* semi) <|> StmtPrint <$> (try loxPrintStmt <* semi) <|> try ifStmt <|> try whileStmt <|> loxBlock
+loxStatement = StmtExpr <$> (try loxExpr <* semi) <|> StmtPrint <$> (try loxPrintStmt <* semi) <|> try ifStmt <|> try whileStmt <|> try loxBlock <|> loxReturn
 
 
 loxBlock' :: Parser [Declaration]
@@ -353,9 +355,7 @@ loxBlock' = do
       _ -> Nothing
 
 loxBlock :: Parser Statement
-loxBlock = do
-  prog <- loxBlock'
-  return $ StmtBlock prog
+loxBlock = StmtBlock <$> loxBlock'
 
 loxDeclStatment :: Parser Declaration
 loxDeclStatment = DeclStatement <$> loxStatement
@@ -398,6 +398,15 @@ loxFuncDecl = do
     parameters :: Parser [T.Text]
     parameters = sepBy identifier comma -- skipping validation of max argument count
 
+loxReturn :: Parser Statement
+loxReturn = do
+  void $ satisfyT return_keyword
+  expr <- optionMaybe loxExpr
+  return $ StmtReturn expr
+  where
+    return_keyword x = case tokinfo_type x of
+      RETURN -> Just ()
+      _ -> Nothing
 
 identifier :: Parser T.Text
 identifier = satisfyT fi
