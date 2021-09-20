@@ -402,6 +402,7 @@ loxReturn :: Parser Statement
 loxReturn = do
   void $ satisfyT return_keyword
   expr <- optionMaybe loxExpr
+  void semi
   return $ StmtReturn expr
   where
     return_keyword x = case tokinfo_type x of

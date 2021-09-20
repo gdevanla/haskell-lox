@@ -30,6 +30,7 @@ data LoxValue
   | LoxValueBool Bool
   | LoxValueIdentifier T.Text
   | LoxValueSentinel -- This is more for the interpreter to return from statements
+  | LoxValueReturn LoxValue
   | LoxValueFunction T.Text [T.Text] [Declaration]  -- Hold on to the AST
   deriving (Show, Eq)
 
