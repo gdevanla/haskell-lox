@@ -18,6 +18,7 @@ import Scanner (scanner)
 import qualified Text.Parsec as P
 import qualified Control.Monad
 import System.Console.Haskeline
+import qualified Data.List as L
 
 -- data NativeFunction = Clock |
 
@@ -29,7 +30,7 @@ data LoxValue
   | LoxValueBool Bool
   | LoxValueIdentifier T.Text
   | LoxValueSentinel -- This is more for the interpreter to return from statements
-  | LoxValueFunction [T.Text] [Declaration]  -- Hold on to the AST
+  | LoxValueFunction T.Text [T.Text] [Declaration]  -- Hold on to the AST
   deriving (Show, Eq)
 
 isTruthy :: LoxValue -> Bool
@@ -67,6 +68,13 @@ updateEnv k v s = go (Just s)
 
 insertEnv :: T.Text -> LoxValue -> Env -> Env
 insertEnv k v s@Env {..} = s {env = M.insert k v env}
+
+multiInsertEnv :: [(T.Text, LoxValue)] -> Env -> Env
+multiInsertEnv values s@Env {..} = let
+  new_env = M.fromList values
+  new_env' = M.union new_env env
+  in
+  s {env=new_env'}
 
 
 showLoxValue :: LoxValue -> String
@@ -178,10 +186,20 @@ interpret (Logical expr1 op expr2) = do
     (And, False) -> return result
     _ -> interpret expr2
 
--- interpret (Call expr arguments _) = do
---   callee <- interpret expr
---   arguments <- mapM interpret arguments
---   return _
+interpret (Call expr arguments _) = do
+  callee <- interpret expr
+  case callee of
+    LoxValueIdentifier callee' -> do
+      args <- mapM interpret arguments
+      s <- get
+      case lookupEnv callee' s of
+        Just (LoxValueFunction _ params block) -> do
+          let pa = L.zip params args
+          s' <- get
+          put $ multiInsertEnv pa (initEnv (Just s'))
+          interpretProgram block
+        Nothing -> ExceptT . return . Left $ "Function not callable"
+
 
 
 
@@ -243,6 +261,13 @@ interpretDeclaration (DeclVar (Decl var Nothing)) = do
   return LoxValueSentinel
 
 interpretDeclaration (DeclStatement stmt) = interpretStmt stmt
+
+interpretDeclaration (DeclFun (Func func_name params block)) = do
+  s <- get
+  let func = LoxValueFunction func_name params block
+  put (insertEnv func_name func s)
+  return LoxValueSentinel
+
 
 interpretProgram :: Program -> InterpreterTIO
 interpretProgram (decl : decls) = go
