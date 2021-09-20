@@ -188,20 +188,15 @@ interpret (Logical expr1 op expr2) = do
 
 interpret (Call expr arguments _) = do
   callee <- interpret expr
+  args <- mapM interpret arguments
   case callee of
-    LoxValueIdentifier callee' -> do
-      args <- mapM interpret arguments
-      s <- get
-      case lookupEnv callee' s of
-        Just (LoxValueFunction _ params block) -> do
-          let pa = L.zip params args
-          s' <- get
-          put $ multiInsertEnv pa (initEnv (Just s'))
-          interpretProgram block
-        Nothing -> ExceptT . return . Left $ "Function not callable"
-
-
-
+    LoxValueFunction _ params block -> do
+      let pa = L.zip params args
+      s' <- get
+      put $ multiInsertEnv pa (initEnv (Just s'))
+      void $ interpretProgram block
+      return LoxValueSentinel
+    _ -> ExceptT . return . Left $ "Function not callable: " <> T.pack (show callee)
 
 interpretStmt :: Statement -> InterpreterTIO
 interpretStmt (StmtExpr expr) = do
@@ -290,7 +285,8 @@ runScript script = do
         Right ast' -> do
           let w = runExceptT (interpretProgram ast')
           (result, _) <- runStateT w (initEnv Nothing)
-          print (result , ast')
+          -- print (result , ast')
+          return ()
         Left e -> print $ "Parser error: " <> show e
     Left e -> print $ "Lexer error: " <> show e
 
