@@ -49,29 +49,29 @@ library:
   source-dirs: src
 
 executables:
-  parsec-exe-1:
-    main:                main1.hs
-    source-dirs:         app
-    dependencies:
-    - haskell-lox
-    - optparse-simple
+  # parsec-exe-1:
+  #   main:                main1.hs
+  #   source-dirs:         app
+  #   dependencies:
+  #   - haskell-lox
+  #   - optparse-simple
 
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
+  #   ghc-options:
+  #   - -threaded
+  #   - -rtsopts
+  #   - -with-rtsopts=-N
 
-  parsec-exe-4:
-    main:                main4.hs
-    source-dirs:         app
-    dependencies:
-    - haskell-lox
-    - optparse-simple
+  # parsec-exe-4:
+  #   main:                main4.hs
+  #   source-dirs:         app
+  #   dependencies:
+  #   - haskell-lox
+  #   - optparse-simple
 
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
+  #   ghc-options:
+  #   - -threaded
+  #   - -rtsopts
+  #   - -with-rtsopts=-N
 
   scanner-exe-1:
     main:                scanner.hs
@@ -85,17 +85,17 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
 
-  haskell-lox-exe:
-    main:                main.hs
-    source-dirs:         app
-    dependencies:
-    - haskell-lox
-    - optparse-simple
+  # haskell-lox-exe:
+  #   main:                main.hs
+  #   source-dirs:         app
+  #   dependencies:
+  #   - haskell-lox
+  #   - optparse-simple
 
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
+  #   ghc-options:
+  #   - -threaded
+  #   - -rtsopts
+  #   - -with-rtsopts=-N
 
 tests:
   haskell-lox-test-1:
