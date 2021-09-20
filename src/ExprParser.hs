@@ -408,7 +408,7 @@ identifier = satisfyT fi
 
 
 loxDeclarations :: Parser Declaration
-loxDeclarations = try loxDeclaration  <|> DeclStatement <$> loxStatement
+loxDeclarations = try loxFuncDecl <|> try loxDeclaration  <|> DeclStatement <$> loxStatement
 
 loxProgram :: Parser Program
 loxProgram = many1 loxDeclarations -- endBy1 loxDeclarations semi

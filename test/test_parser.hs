@@ -99,10 +99,12 @@ test_statements = [
                                         Call (Identifier "func") [Identifier "x3"] (LoxSourcePos 1 8))
                                       [Call (Identifier "func") [Identifier "x1"] (LoxSourcePos 1 17),
                                        Identifier "x2"] (LoxSourcePos 1 22)))
-           ]
+           ],
+
+    test_statement "fun add(x1, y1) {result=x1+y1;print x1;}" $
+    Right [DeclFun (Func "add" ["x1", "y1"] [DeclStatement (StmtExpr (Assignment "result" (Binary (Identifier "x1") Plus (Identifier "y1")))), DeclStatement (StmtPrint (Identifier "x1"))])]
 
   ]
-
 
 
 test_parsers = test_exprs ++ test_statements
