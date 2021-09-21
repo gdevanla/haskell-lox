@@ -3,7 +3,7 @@
 Implementation of `Lox` interpreter as described in [Crafting Interpreters](https://craftinginterpreters.com/).
 
 1. [Scanning](src/Scanner.hs) - [Commentary](https://gdevanla.github.io/posts/crafting-interpreter-scanning.html)
-2. [Parsing](src/ExprParser.hs) - [COmmentary](https://gdevanla.github.io/posts/crafting-interpreter-parsing-expressions.html)
+2. [Parsing](src/ExprParser.hs) - [Commentary](https://gdevanla.github.io/posts/crafting-interpreter-parsing-expressions.html)
 
 
 ## Execute
