@@ -85,6 +85,9 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     - -O2
+    - -funfolding-use-threshold=16
+    - -fexcess-precision
+    - -optc-ffast-math
 
   # haskell-lox-exe:
   #   main:                main.hs
