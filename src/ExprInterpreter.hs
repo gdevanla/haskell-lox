@@ -2,6 +2,8 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE BangPatterns #-}
+{-# OPTIONS_GHC -funbox-strict-fields #-}
+
 
 module ExprInterpreter(interpret, interpretProgram, runScript, LoxValue(..), lookupEnv, updateEnv, insertEnv, initEnv, runScriptInteractive, LoxError(..)) where
 import System.IO
@@ -50,6 +52,7 @@ data Env = Env {
                parent :: !(Maybe Env)
                } deriving (Show, Eq)
 
+
 initEnv :: Maybe Env -> Env
 initEnv !parent = Env {env=M.empty, parent=parent}
 
@@ -57,17 +60,17 @@ lookupEnv :: T.Text -> Env -> Maybe LoxValue
 lookupEnv !k !environ = go (Just environ)
   where
     go (Just Env{..}) = case M.lookup k env of
-                           Just v -> Just v
+                           Just v -> Just $! v
                            Nothing -> go parent
     go Nothing = Nothing
 
 updateEnv :: T.Text -> LoxValue -> Env -> Maybe Env
-updateEnv !k !v !s = go (Just s)
+updateEnv !k !v !s = go (Just $! s)
   where
     go (Just s'@Env{..}) = case M.lookup k env of
       Just _ -> Just s'{env=M.update (\_ -> Just v) k env}
       Nothing -> do
-        parent_state <- go parent
+        !parent_state <- go parent
         return $ s'{parent=Just parent_state}
     go Nothing = Nothing
 
@@ -77,7 +80,7 @@ insertEnv !k !v s@Env {..} = s {env = M.insert k v env}
 multiInsertEnv :: [(T.Text, LoxValue)] -> Env -> Env
 multiInsertEnv !values s@Env {..} = let
   new_env = M.fromList values
-  new_env' = M.union new_env env
+  !new_env' = M.union new_env env
   in
   s {env=new_env'}
 
@@ -182,9 +185,9 @@ interpret (Assignment lhs rhs) = do
   -- liftIO $ putStrLn $ show $ updateEnv lhs lox_value s'
   case updateEnv lhs lox_value s' of
     Just s'' -> do
-      put $ s''
+      put $! s''
       --liftIO $ putStrLn $ show s''
-      lift . return  $ lox_value
+      lift . return  $! lox_value
     Nothing -> ExceptT . return . Left $ SystemError $ "Assignment to variable before declaration :" <> lhs
 
 interpret (Logical expr1 op expr2) = do
@@ -200,16 +203,16 @@ interpret (Call !expr !arguments _) = do
   !orig <- get
   case callee of
     LoxValueFunction !func_name !params !block !closure -> do
-      let pa = L.zip params args
+      let !pa = L.zip params args
       --liftIO $ putStrLn $ show s'
       let s = multiInsertEnv pa (initEnv (Just closure))
       -- we need to insert this back here to resolve circular dependency
       let s' = insertEnv func_name (LoxValueFunction func_name params block closure) s
-      put s'
+      put $! s'
       !value <- catchError (interpretProgram block) f
       put orig
-      return value
-    _ -> ExceptT . return . Left $ SystemError $ "Function not callable: " <> T.pack (show callee)
+      return $! value
+    _ -> ExceptT . return . Left $! SystemError $ "Function not callable: " <> T.pack (show callee)
   where
     f (SystemError e) = ExceptT . return . Left $ SystemError e
     f (ControlFlow (LoxValueReturn e)) = return e
@@ -242,7 +245,7 @@ interpretStmt (StmtBlock program) = do
       ExceptT . return . Left $ msg
 
 
-interpretStmt (StmtIf (IfElse cond ifexpr elseexpr)) = do
+interpretStmt (StmtIf (IfElse !cond !ifexpr !elseexpr)) = do
   !cond_result <- interpret cond
   if isTruthy cond_result
     then interpretStmt ifexpr
@@ -288,21 +291,21 @@ interpretDeclaration (DeclFun (Func !func_name !params !block)) = do
   return LoxValueSentinel
 
 interpretProgram :: Program -> InterpreterTIO
-interpretProgram (decl : decls) = go
+interpretProgram = go
   where
-    go = do
-      result <- interpretDeclaration decl
+    go (decl:decls)= do
+      !result <- interpretDeclaration decl
       case result of
-        LoxValueReturn !x -> throwError (ControlFlow $ LoxValueReturn x)
-        _ -> if L.null decls then return result else  interpretProgram decls
-interpretProgram []  = return LoxValueSentinel
+        LoxValueReturn !x -> throwError (ControlFlow $! LoxValueReturn x)
+        _ -> if L.null decls then return $! result else go decls
+    go [] = return LoxValueSentinel
 
 runScript :: T.Text -> IO ()
 runScript script = do
   let lex_result = scanner (T.unpack script)
   case lex_result of
     Right lex -> do
-      let ast = P.parse loxProgram "" (L.filter filter_comments lex)
+      let !ast = P.parse loxProgram "" (L.filter filter_comments lex)
       case ast of
         Right ast' -> do
           let w = runExceptT (interpretProgram ast')
