@@ -47,33 +47,33 @@ data LogicOp = And | Or deriving (Show, Eq)
 
 type Program = [Declaration]
 
-data Declaration = DeclFun Func | DeclVar Decl | DeclStatement Statement  deriving (Show, Eq)
+data Declaration = DeclFun !Func | DeclVar !Decl | DeclStatement !Statement  deriving (Show, Eq)
 
-data Func = Func T.Text [T.Text] [Declaration]  deriving (Show, Eq)
+data Func = Func !T.Text ![T.Text] ![Declaration]  deriving (Show, Eq)
 
-data Decl = Decl T.Text (Maybe Expr)  deriving (Show, Eq)
+data Decl = Decl !T.Text !(Maybe Expr)  deriving (Show, Eq)
 
-data Statement = StmtExpr Expr | StmtPrint Expr | StmtIf IfElse | StmtBlock [Declaration]
-  | StmtWhile While | StmtReturn (Maybe Expr)
+data Statement = StmtExpr !Expr | StmtPrint !Expr | StmtIf !IfElse | StmtBlock [Declaration]
+  | StmtWhile !While | StmtReturn !(Maybe Expr)
   deriving (Show, Eq)
 
 
-data IfElse = IfElse Expr Statement (Maybe Statement) deriving (Show, Eq)
+data IfElse = IfElse !Expr !Statement (Maybe Statement) deriving (Show, Eq)
 
-data While = While Expr Statement deriving (Show, Eq)
+data While = While !Expr !Statement deriving (Show, Eq)
 
 data Expr
-  = Number Double
-  | Literal T.Text
-  | Identifier T.Text
-  | LoxBool Bool
+  = Number !Double
+  | Literal !T.Text
+  | Identifier !T.Text
+  | LoxBool !Bool
   | LoxNil
-  | Paren Expr
-  | Unary UnaryOp Expr
-  | Binary Expr BinOp Expr
-  | Assignment T.Text Expr
-  | Logical Expr LogicOp Expr
-  | Call Expr [Expr] LoxSourcePos
+  | Paren !Expr
+  | Unary !UnaryOp !Expr
+  | Binary !Expr !BinOp !Expr
+  | Assignment !T.Text !Expr
+  | Logical !Expr !LogicOp !Expr
+  | Call !Expr [Expr] !LoxSourcePos
   deriving (Show, Eq)
 
 -- satisfy = tokenPrim (t -> String) (SourcePos -> t -> s -> SourcePos) (t -> Maybe a)

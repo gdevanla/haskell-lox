@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE BangPatterns #-}
 
 module ExprInterpreter(interpret, interpretProgram, runScript, LoxValue(..), lookupEnv, updateEnv, insertEnv, initEnv, runScriptInteractive, LoxError(..)) where
 import System.IO
@@ -23,37 +24,37 @@ import Control.Exception (throw)
 
 -- data NativeFunction = Clock |
 
-data LoxError = SystemError T.Text | ControlFlow LoxValue deriving (Show, Eq)
+data LoxError = SystemError !T.Text | ControlFlow !LoxValue deriving (Show, Eq)
 
 -- https://www.seas.upenn.edu/~cis552/13fa/lectures/FunEnv.html
 data LoxValue
-  = LoxValueString T.Text
-  | LoxValueDouble Double
+  = LoxValueString !T.Text
+  | LoxValueDouble !Double
   | LoxValueNil
-  | LoxValueBool Bool
-  | LoxValueIdentifier T.Text
+  | LoxValueBool !Bool
+  | LoxValueIdentifier !T.Text
   | LoxValueSentinel -- This is more for the interpreter to return from statements
-  | LoxValueReturn LoxValue
-  | LoxValueFunction T.Text [T.Text] [Declaration] Env -- Hold on to the AST and Closure
+  | LoxValueReturn !LoxValue
+  | LoxValueFunction !T.Text [T.Text] [Declaration] !Env -- Hold on to the AST and Closure
   deriving (Show, Eq)
 
 isTruthy :: LoxValue -> Bool
 isTruthy LoxValueNil = False
-isTruthy (LoxValueBool x) = x
+isTruthy (LoxValueBool !x) = x
 isTruthy _ = True
 
 -- type Env = M.Map T.Text LoxValue
 
 data Env = Env {
-               env :: M.Map T.Text LoxValue,
-               parent :: Maybe Env
+               env :: !(M.Map T.Text LoxValue),
+               parent :: !(Maybe Env)
                } deriving (Show, Eq)
 
 initEnv :: Maybe Env -> Env
-initEnv parent = Env {env=M.empty, parent=parent}
+initEnv !parent = Env {env=M.empty, parent=parent}
 
 lookupEnv :: T.Text -> Env -> Maybe LoxValue
-lookupEnv k environ = go (Just environ)
+lookupEnv !k !environ = go (Just environ)
   where
     go (Just Env{..}) = case M.lookup k env of
                            Just v -> Just v
@@ -61,7 +62,7 @@ lookupEnv k environ = go (Just environ)
     go Nothing = Nothing
 
 updateEnv :: T.Text -> LoxValue -> Env -> Maybe Env
-updateEnv k v s = go (Just s)
+updateEnv !k !v !s = go (Just s)
   where
     go (Just s'@Env{..}) = case M.lookup k env of
       Just _ -> Just s'{env=M.update (\_ -> Just v) k env}
@@ -71,10 +72,10 @@ updateEnv k v s = go (Just s)
     go Nothing = Nothing
 
 insertEnv :: T.Text -> LoxValue -> Env -> Env
-insertEnv k v s@Env {..} = s {env = M.insert k v env}
+insertEnv !k !v s@Env {..} = s {env = M.insert k v env}
 
 multiInsertEnv :: [(T.Text, LoxValue)] -> Env -> Env
-multiInsertEnv values s@Env {..} = let
+multiInsertEnv !values s@Env {..} = let
   new_env = M.fromList values
   new_env' = M.union new_env env
   in
@@ -101,8 +102,8 @@ unpackIdent x = lift . return $ x
 type InterpreterTIO = ExceptT LoxError (StateT Env IO) LoxValue
 
 applyOpToDouble :: LoxValue -> LoxValue -> BinOp -> (Double -> Double -> Double) -> InterpreterTIO
-applyOpToDouble (LoxValueDouble x) (LoxValueDouble y) bop op = lift . return $ LoxValueDouble $ op x y
-applyOpToDouble x y bop _ = ExceptT . return $ Left $ SystemError value
+applyOpToDouble (LoxValueDouble !x) (LoxValueDouble !y) bop op = lift . return $ LoxValueDouble $ op x y
+applyOpToDouble !x !y !bop _ = ExceptT . return $ Left $ SystemError value
   where
     value =
       T.pack $
@@ -113,8 +114,8 @@ applyOpToDouble x y bop _ = ExceptT . return $ Left $ SystemError value
           ++ " and "
           ++ show y
 applyCompOpToDouble :: LoxValue -> LoxValue -> BinOp -> (Double -> Double -> Bool) -> InterpreterTIO
-applyCompOpToDouble (LoxValueDouble x) (LoxValueDouble y) bop op = lift . return $ LoxValueBool $ op x y
-applyCompOpToDouble x y bop _ = ExceptT . return $ Left $ SystemError value
+applyCompOpToDouble (LoxValueDouble !x) (LoxValueDouble !y) bop op = lift . return $ LoxValueBool $ op x y
+applyCompOpToDouble !x !y !bop _ = ExceptT . return $ Left $ SystemError value
   where
     value =
       T.pack $
@@ -125,22 +126,20 @@ applyCompOpToDouble x y bop _ = ExceptT . return $ Left $ SystemError value
           ++ " and "
           ++ show y
 
-
-
 interpret :: Expr -> InterpreterTIO
-interpret (Number x) = lift $ return $ LoxValueDouble x
-interpret (Literal t) = lift $ return $ LoxValueString t
-interpret (LoxBool t) = lift $ return $ LoxValueBool t
+interpret (Number !x) = lift $ return $ LoxValueDouble x
+interpret (Literal !t) = lift $ return $ LoxValueString t
+interpret (LoxBool !t) = lift $ return $ LoxValueBool t
 interpret LoxNil = lift $ return LoxValueNil
-interpret (Paren expr) = interpret expr
-interpret (Identifier i) = do
+interpret (Paren !expr) = interpret expr
+interpret (Identifier !i) = do
   s <- get
   case lookupEnv i s of
-    Just v -> lift . return $ v
+    Just !v -> lift . return $ v
     Nothing -> ExceptT . return . Left $ SystemError $ "Unknown var: " <> i
 interpret (Unary op expr) = do
   value' <- interpret expr
-  value <- unpackIdent value'
+  !value <- unpackIdent value'
   case op of
     UnaryMinus -> case value of
       (LoxValueDouble d) -> lift $ return $ LoxValueDouble (-d)
@@ -153,9 +152,9 @@ interpret (Unary op expr) = do
 
 interpret (Binary expr1 op expr2) = do
   right_expr' <- interpret expr1
-  right_expr <- unpackIdent right_expr'
+  !right_expr <- unpackIdent right_expr'
   left_expr' <- interpret expr2
-  left_expr <- unpackIdent left_expr'
+  !left_expr <- unpackIdent left_expr'
   case op of
     -- arith operations
     Minus -> applyOpToDouble right_expr left_expr Minus (-)
@@ -175,7 +174,7 @@ interpret (Binary expr1 op expr2) = do
       (x, y) -> ExceptT . return . Left $ SystemError $ T.pack $ "Unsupported operation (+) on "  ++ show x ++ " and " ++ show y
 interpret (Assignment lhs rhs) = do
   s <- get
-  lox_value <- interpret rhs
+  !lox_value <- interpret rhs
   s' <- get  -- need to get an s after all rhs are processed
   -- liftIO $ putStrLn "in assignment"
   -- liftIO $ putStrLn $ show lox_value
@@ -189,25 +188,25 @@ interpret (Assignment lhs rhs) = do
     Nothing -> ExceptT . return . Left $ SystemError $ "Assignment to variable before declaration :" <> lhs
 
 interpret (Logical expr1 op expr2) = do
-  result <- interpret expr1
+  !result <- interpret expr1
   case (op, isTruthy result) of
     (Or, True) -> return result
     (And, False) -> return result
     _ -> interpret expr2
 
-interpret (Call expr arguments _) = do
-  callee <- interpret expr
-  args <- mapM interpret arguments
-  orig <- get
+interpret (Call !expr !arguments _) = do
+  !callee <- interpret expr
+  !args <- mapM interpret arguments
+  !orig <- get
   case callee of
-    LoxValueFunction func_name params block closure -> do
+    LoxValueFunction !func_name !params !block !closure -> do
       let pa = L.zip params args
       --liftIO $ putStrLn $ show s'
       let s = multiInsertEnv pa (initEnv (Just closure))
       -- we need to insert this back here to resolve circular dependency
       let s' = insertEnv func_name (LoxValueFunction func_name params block closure) s
       put s'
-      value <- catchError (interpretProgram block) f
+      !value <- catchError (interpretProgram block) f
       put orig
       return value
     _ -> ExceptT . return . Left $ SystemError $ "Function not callable: " <> T.pack (show callee)
@@ -218,12 +217,12 @@ interpret (Call expr arguments _) = do
 
 interpretStmt :: Statement -> InterpreterTIO
 interpretStmt (StmtExpr expr) = do
-  result <- interpret expr
+  !result <- interpret expr
   modify (insertEnv "_" result)
   return result
 
 interpretStmt (StmtPrint expr) = do
-  result <- interpret expr
+  !result <- interpret expr
   liftIO $ putStrLn $ showLoxValue result
   return LoxValueSentinel  -- For now let print return this
 
@@ -231,7 +230,7 @@ interpretStmt (StmtBlock program) = do
   s <- get
   let s' = initEnv (Just s)
   put s'
-  result <- interpretProgram program
+  !result <- interpretProgram program
   s'' <- get
   case parent s'' of
     Just p ->  do
@@ -244,7 +243,7 @@ interpretStmt (StmtBlock program) = do
 
 
 interpretStmt (StmtIf (IfElse cond ifexpr elseexpr)) = do
-  cond_result <- interpret cond
+  !cond_result <- interpret cond
   if isTruthy cond_result
     then interpretStmt ifexpr
     else maybe (return LoxValueNil) interpretStmt elseexpr
@@ -258,8 +257,8 @@ interpretStmt (StmtWhile (While cond stmt)) = go
         go
         else return LoxValueSentinel
 
-interpretStmt (StmtReturn (Just expr)) = do
-  result <- interpret expr
+interpretStmt (StmtReturn (Just !expr)) = do
+  !result <- interpret expr
   -- liftIO $ putStrLn "Returning result"
   -- liftIO $ putStrLn $ show result
   return $ LoxValueReturn result
@@ -267,21 +266,21 @@ interpretStmt (StmtReturn Nothing) = return $ LoxValueReturn $ LoxValueDouble 99
 
 -- interpretDeclaration :: Declaration -> Env -> IO (Env, Maybe T.Text)
 interpretDeclaration :: Declaration -> InterpreterTIO
-interpretDeclaration (DeclVar (Decl var (Just expr))) = do
-  result <- interpret expr
+interpretDeclaration (DeclVar (Decl !var (Just !expr))) = do
+  !result <- interpret expr
   s <- get
   let s' = insertEnv var result s
   put s'
   return LoxValueSentinel
 
-interpretDeclaration (DeclVar (Decl var Nothing)) = do
+interpretDeclaration (DeclVar (Decl !var Nothing)) = do
   s <- get
   put (insertEnv var LoxValueNil s)
   return LoxValueSentinel
 
-interpretDeclaration (DeclStatement stmt) = interpretStmt stmt
+interpretDeclaration (DeclStatement !stmt) = interpretStmt stmt
 
-interpretDeclaration (DeclFun (Func func_name params block)) = do
+interpretDeclaration (DeclFun (Func !func_name !params !block)) = do
   closure <- get
   let func = LoxValueFunction func_name params block closure
   let closure' = insertEnv func_name func closure -- capture the closure, add back func later on
@@ -294,7 +293,7 @@ interpretProgram (decl : decls) = go
     go = do
       result <- interpretDeclaration decl
       case result of
-        LoxValueReturn x -> throwError (ControlFlow $ LoxValueReturn x)
+        LoxValueReturn !x -> throwError (ControlFlow $ LoxValueReturn x)
         _ -> if L.null decls then return result else  interpretProgram decls
 interpretProgram []  = return LoxValueSentinel
 
