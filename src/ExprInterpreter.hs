@@ -2,7 +2,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module ExprInterpreter(interpret, interpretProgram, runScript, LoxValue(..), lookupEnv, updateEnv, insertEnv, initEnv, runScriptInteractive) where
+module ExprInterpreter(interpret, interpretProgram, runScript, LoxValue(..), lookupEnv, updateEnv, insertEnv, initEnv, runScriptInteractive, LoxError(..)) where
 import System.IO
 import Data.Text as T
 import Import hiding (many, try, (<|>))
@@ -19,8 +19,11 @@ import qualified Text.Parsec as P
 import qualified Control.Monad
 import System.Console.Haskeline
 import qualified Data.List as L
+import Control.Exception (throw)
 
 -- data NativeFunction = Clock |
+
+data LoxError = SystemError T.Text | ControlFlow LoxValue deriving (Show, Eq)
 
 -- https://www.seas.upenn.edu/~cis552/13fa/lectures/FunEnv.html
 data LoxValue
@@ -31,7 +34,7 @@ data LoxValue
   | LoxValueIdentifier T.Text
   | LoxValueSentinel -- This is more for the interpreter to return from statements
   | LoxValueReturn LoxValue
-  | LoxValueFunction T.Text [T.Text] [Declaration]  -- Hold on to the AST
+  | LoxValueFunction T.Text [T.Text] [Declaration] Env -- Hold on to the AST and Closure
   deriving (Show, Eq)
 
 isTruthy :: LoxValue -> Bool
@@ -92,14 +95,14 @@ unpackIdent (LoxValueIdentifier x) = do
   let v1 = lookupEnv x s
   case v1 of
     Just v' -> lift . return $ v'
-    Nothing -> ExceptT . return $ Left $ "Unknown var: " <> x
+    Nothing -> ExceptT . return $ Left $ SystemError $ "Unknown var: " <> x
 unpackIdent x = lift . return $ x
 
-type InterpreterTIO = ExceptT T.Text (StateT Env IO) LoxValue
+type InterpreterTIO = ExceptT LoxError (StateT Env IO) LoxValue
 
 applyOpToDouble :: LoxValue -> LoxValue -> BinOp -> (Double -> Double -> Double) -> InterpreterTIO
 applyOpToDouble (LoxValueDouble x) (LoxValueDouble y) bop op = lift . return $ LoxValueDouble $ op x y
-applyOpToDouble x y bop _ = ExceptT . return $ Left value
+applyOpToDouble x y bop _ = ExceptT . return $ Left $ SystemError value
   where
     value =
       T.pack $
@@ -111,7 +114,7 @@ applyOpToDouble x y bop _ = ExceptT . return $ Left value
           ++ show y
 applyCompOpToDouble :: LoxValue -> LoxValue -> BinOp -> (Double -> Double -> Bool) -> InterpreterTIO
 applyCompOpToDouble (LoxValueDouble x) (LoxValueDouble y) bop op = lift . return $ LoxValueBool $ op x y
-applyCompOpToDouble x y bop _ = ExceptT . return $ Left value
+applyCompOpToDouble x y bop _ = ExceptT . return $ Left $ SystemError value
   where
     value =
       T.pack $
@@ -134,14 +137,14 @@ interpret (Identifier i) = do
   s <- get
   case lookupEnv i s of
     Just v -> lift . return $ v
-    Nothing -> ExceptT . return . Left $ "Unknown var: " <> i
+    Nothing -> ExceptT . return . Left $ SystemError $ "Unknown var: " <> i
 interpret (Unary op expr) = do
   value' <- interpret expr
   value <- unpackIdent value'
   case op of
     UnaryMinus -> case value of
       (LoxValueDouble d) -> lift $ return $ LoxValueDouble (-d)
-      d -> ExceptT . return . Left $ T.pack ("Unexpected type: " ++ show d)
+      d -> ExceptT . return . Left $ SystemError $ T.pack ("Unexpected type: " ++ show d)
     UnaryBang -> case value of
       LoxValueNil -> lift . return $ LoxValueBool True
       LoxValueBool b -> lift .return $ LoxValueBool (not b)
@@ -169,21 +172,21 @@ interpret (Binary expr1 op expr2) = do
     Plus -> case (right_expr, left_expr) of
       (LoxValueString x, LoxValueString y) -> lift .return $ LoxValueString $ x <> y
       (LoxValueDouble x, LoxValueDouble y) -> lift . return $ LoxValueDouble $ x + y
-      (x, y) -> ExceptT . return . Left $ T.pack $ "Unsupported operation (+) on "  ++ show x ++ " and " ++ show y
+      (x, y) -> ExceptT . return . Left $ SystemError $ T.pack $ "Unsupported operation (+) on "  ++ show x ++ " and " ++ show y
 interpret (Assignment lhs rhs) = do
   s <- get
   lox_value <- interpret rhs
   s' <- get  -- need to get an s after all rhs are processed
-  liftIO $ putStrLn "in assignment"
-  liftIO $ putStrLn $ show lox_value
-  liftIO $ putStrLn $ show s'
-  liftIO $ putStrLn $ show $ updateEnv lhs lox_value s'
+  -- liftIO $ putStrLn "in assignment"
+  -- liftIO $ putStrLn $ show lox_value
+  -- liftIO $ putStrLn $ show s'
+  -- liftIO $ putStrLn $ show $ updateEnv lhs lox_value s'
   case updateEnv lhs lox_value s' of
     Just s'' -> do
       put $ s''
-      liftIO $ putStrLn $ show s''
+      --liftIO $ putStrLn $ show s''
       lift . return  $ lox_value
-    Nothing -> ExceptT . return . Left $ "Assignment to variable before declaration :" <> lhs
+    Nothing -> ExceptT . return . Left $ SystemError $ "Assignment to variable before declaration :" <> lhs
 
 interpret (Logical expr1 op expr2) = do
   result <- interpret expr1
@@ -195,13 +198,23 @@ interpret (Logical expr1 op expr2) = do
 interpret (Call expr arguments _) = do
   callee <- interpret expr
   args <- mapM interpret arguments
+  orig <- get
   case callee of
-    LoxValueFunction _ params block -> do
+    LoxValueFunction func_name params block closure -> do
       let pa = L.zip params args
-      s' <- get
-      put $ multiInsertEnv pa (initEnv (Just s'))
-      interpretProgram block
-    _ -> ExceptT . return . Left $ "Function not callable: " <> T.pack (show callee)
+      --liftIO $ putStrLn $ show s'
+      let s = multiInsertEnv pa (initEnv (Just closure))
+      -- we need to insert this back here to resolve circular dependency
+      let s' = insertEnv func_name (LoxValueFunction func_name params block closure) s
+      put s'
+      value <- catchError (interpretProgram block) f
+      put orig
+      return value
+    _ -> ExceptT . return . Left $ SystemError $ "Function not callable: " <> T.pack (show callee)
+  where
+    f (SystemError e) = ExceptT . return . Left $ SystemError e
+    f (ControlFlow (LoxValueReturn e)) = return e
+    f (ControlFlow v) = ExceptT . return . Left $ SystemError $ "Unknown handler:" <> T.pack (show v)
 
 interpretStmt :: Statement -> InterpreterTIO
 interpretStmt (StmtExpr expr) = do
@@ -225,7 +238,7 @@ interpretStmt (StmtBlock program) = do
       put p
       return result
     Nothing -> do
-      let msg = "Unexpected state of environment where parent is missing from passed in child"
+      let msg = SystemError "Unexpected state of environment where parent is missing from passed in child"
       liftIO $ print msg
       ExceptT . return . Left $ msg
 
@@ -269,11 +282,11 @@ interpretDeclaration (DeclVar (Decl var Nothing)) = do
 interpretDeclaration (DeclStatement stmt) = interpretStmt stmt
 
 interpretDeclaration (DeclFun (Func func_name params block)) = do
-  s <- get
-  let func = LoxValueFunction func_name params block
-  put (insertEnv func_name func s)
+  closure <- get
+  let func = LoxValueFunction func_name params block closure
+  let closure' = insertEnv func_name func closure -- capture the closure, add back func later on
+  put closure'
   return LoxValueSentinel
-
 
 interpretProgram :: Program -> InterpreterTIO
 interpretProgram (decl : decls) = go
@@ -281,9 +294,9 @@ interpretProgram (decl : decls) = go
     go = do
       result <- interpretDeclaration decl
       case result of
-        LoxValueReturn x -> return x
+        LoxValueReturn x -> throwError (ControlFlow $ LoxValueReturn x)
         _ -> if L.null decls then return result else  interpretProgram decls
-interpretProgram [] = return LoxValueSentinel
+interpretProgram []  = return LoxValueSentinel
 
 runScript :: T.Text -> IO ()
 runScript script = do
