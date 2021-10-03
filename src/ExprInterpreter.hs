@@ -31,12 +31,12 @@ data LoxError = SystemError !T.Text | ControlFlow !LoxValue deriving (Show, Eq)
 -- https://www.seas.upenn.edu/~cis552/13fa/lectures/FunEnv.html
 data LoxValue
   = LoxValueString !T.Text
-  | LoxValueDouble !Double
+  | LoxValueDouble {-# UNPACK #-} !Double
   | LoxValueNil
-  | LoxValueBool !Bool
+  | LoxValueBool {-# UNPACK #-}!Bool
   | LoxValueIdentifier !T.Text
   | LoxValueSentinel -- This is more for the interpreter to return from statements
-  | LoxValueReturn !LoxValue
+  | LoxValueReturn {-# UNPACK #-}!LoxValue
   | LoxValueFunction !T.Text [T.Text] [Declaration] !Env -- Hold on to the AST and Closure
   deriving (Show, Eq)
 
@@ -44,6 +44,7 @@ isTruthy :: LoxValue -> Bool
 isTruthy LoxValueNil = False
 isTruthy (LoxValueBool !x) = x
 isTruthy _ = True
+--{-# INLINE isTruthy #-}
 
 -- type Env = M.Map T.Text LoxValue
 
@@ -55,6 +56,7 @@ data Env = Env {
 
 initEnv :: Maybe Env -> Env
 initEnv !parent = Env {env=M.empty, parent=parent}
+--{-# INLINE initEnv #-}
 
 lookupEnv :: T.Text -> Env -> Maybe LoxValue
 lookupEnv !k !environ = go (Just environ)
@@ -63,6 +65,7 @@ lookupEnv !k !environ = go (Just environ)
                            Just v -> Just $! v
                            Nothing -> go parent
     go Nothing = Nothing
+--{-# INLINE lookupEnv #-}
 
 updateEnv :: T.Text -> LoxValue -> Env -> Maybe Env
 updateEnv !k !v !s = go (Just $! s)
@@ -76,6 +79,7 @@ updateEnv !k !v !s = go (Just $! s)
 
 insertEnv :: T.Text -> LoxValue -> Env -> Env
 insertEnv !k !v s@Env {..} = s {env = M.insert k v env}
+--{-# INLINE insertEnv #-}
 
 multiInsertEnv :: [(T.Text, LoxValue)] -> Env -> Env
 multiInsertEnv !values s@Env {..} = let
@@ -83,7 +87,7 @@ multiInsertEnv !values s@Env {..} = let
   !new_env' = M.union new_env env
   in
   s {env=new_env'}
-
+-- {-# INLINE multiInsertEnv #-}
 
 showLoxValue :: LoxValue -> String
 showLoxValue (LoxValueString t) = show t
@@ -101,6 +105,7 @@ unpackIdent (LoxValueIdentifier x) = do
     Just v' -> lift . return $ v'
     Nothing -> ExceptT . return $ Left $ SystemError $ "Unknown var: " <> x
 unpackIdent x = lift . return $ x
+--{-# INLINE unpackIdent #-}
 
 type InterpreterTIO = ExceptT LoxError (StateT Env IO) LoxValue
 
@@ -116,6 +121,8 @@ applyOpToDouble !x !y !bop _ = ExceptT . return $ Left $ SystemError value
           ++ show x
           ++ " and "
           ++ show y
+--{-# INLINE applyOpToDouble #-}
+
 applyCompOpToDouble :: LoxValue -> LoxValue -> BinOp -> (Double -> Double -> Bool) -> InterpreterTIO
 applyCompOpToDouble (LoxValueDouble !x) (LoxValueDouble !y) bop op = lift . return $ LoxValueBool $ op x y
 applyCompOpToDouble !x !y !bop _ = ExceptT . return $ Left $ SystemError value
@@ -128,6 +135,7 @@ applyCompOpToDouble !x !y !bop _ = ExceptT . return $ Left $ SystemError value
           ++ show x
           ++ " and "
           ++ show y
+--{-# INLINE applyCompOpToDouble #-}
 
 interpret :: Expr -> InterpreterTIO
 interpret (Number !x) = lift $ return $ LoxValueDouble x
@@ -205,9 +213,9 @@ interpret (Call !expr !arguments _) = do
     LoxValueFunction !func_name !params !block !closure -> do
       let !pa = L.zip params args
       --liftIO $ putStrLn $ show s'
-      let s = multiInsertEnv pa (initEnv (Just closure))
+      let !s = multiInsertEnv pa (initEnv (Just closure))
       -- we need to insert this back here to resolve circular dependency
-      let s' = insertEnv func_name (LoxValueFunction func_name params block closure) s
+      let !s' = insertEnv func_name (LoxValueFunction func_name params block closure) s
       put $! s'
       !value <- catchError (interpretProgram block) f
       put orig
@@ -217,6 +225,7 @@ interpret (Call !expr !arguments _) = do
     f (SystemError e) = ExceptT . return . Left $ SystemError e
     f (ControlFlow (LoxValueReturn e)) = return e
     f (ControlFlow v) = ExceptT . return . Left $ SystemError $ "Unknown handler:" <> T.pack (show v)
+--{-# INLINE interpret #-}
 
 interpretStmt :: Statement -> InterpreterTIO
 interpretStmt (StmtExpr expr) = do
@@ -267,6 +276,8 @@ interpretStmt (StmtReturn (Just !expr)) = do
   return $ LoxValueReturn result
 interpretStmt (StmtReturn Nothing) = return $ LoxValueReturn $ LoxValueDouble 9999.0
 
+-- {-# INLINE interpretStmt #-}
+
 -- interpretDeclaration :: Declaration -> Env -> IO (Env, Maybe T.Text)
 interpretDeclaration :: Declaration -> InterpreterTIO
 interpretDeclaration (DeclVar (Decl !var (Just !expr))) = do
@@ -285,10 +296,11 @@ interpretDeclaration (DeclStatement !stmt) = interpretStmt stmt
 
 interpretDeclaration (DeclFun (Func !func_name !params !block)) = do
   closure <- get
-  let func = LoxValueFunction func_name params block closure
-  let closure' = insertEnv func_name func closure -- capture the closure, add back func later on
+  let !func = LoxValueFunction func_name params block closure
+  let !closure' = insertEnv func_name func closure -- capture the closure, add back func later on
   put closure'
   return LoxValueSentinel
+--{-# INLINE interpretDeclaration #-}
 
 interpretProgram :: Program -> InterpreterTIO
 interpretProgram = go

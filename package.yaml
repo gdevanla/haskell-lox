@@ -81,25 +81,26 @@ executables:
     - optparse-simple
 
     ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
+    #- -rtsopts
     - -O2
     - -funfolding-use-threshold=16
     - -fexcess-precision
     - -optc-ffast-math
+    - -fprof-auto
+    #- -threaded
+    #- -with-rtsopts=-N
 
-  # haskell-lox-exe:
-  #   main:                main.hs
-  #   source-dirs:         app
-  #   dependencies:
-  #   - haskell-lox
-  #   - optparse-simple
+  haskell-lox-exe:
+    main:                main.hs
+    source-dirs:         app
+    dependencies:
+    - haskell-lox
+    - optparse-simple
 
-  #   ghc-options:
-  #   - -threaded
-  #   - -rtsopts
-  #   - -with-rtsopts=-N
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
 
 tests:
   haskell-lox-test-1:
