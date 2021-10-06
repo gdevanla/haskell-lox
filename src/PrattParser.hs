@@ -40,8 +40,11 @@ hasToken = do
     [] -> return False
 
 
-nud :: Token -> Double
-nud (Number x) = x
+nud :: Token -> State [Token] Double
+nud (Number x) = return x
+nud Minus = do
+  right <- expression 100  -- add this to prefix map
+  return $ -right
 nud _ = error "only literal supported for nud"
 
 prec :: Token -> Int
@@ -76,7 +79,7 @@ led left tok = do
 expression :: Int -> TokenS
 expression rbp = do
   token <- nextToken
-  let left = nud token
+  left <- nud token
   h <- hasToken
   if h then do
     nt1 <- currToken
@@ -98,5 +101,6 @@ expr1 = [(Number 1), Plus, (Number 2), Plus,  (Number 3), Plus, (Number 4), Plus
 expr2 = [(Number 10), Minus, (Number 20), Plus, (Number 10), Plus, (Number 20), EndTok]
 expr3 = [(Number 10), Star, (Number 20), Star, (Number 10), Slash, (Number 5), EndTok]
 expr4 = [(Number 1), Plus, (Number 2), Star, (Number 3), Plus, (Number 10), Slash, (Number 5), EndTok]
+expr5 = [(Number 1), Plus, (Number 2), Star, (Number 3), Plus, (Number 10), Slash, Minus, (Number 5), EndTok]
 
-evalExpression expr = map (runState (expression 0)) [expr1, expr2, expr3, expr4]
+evalExpression = map (runState (expression 0)) [expr1, expr2, expr3, expr4, expr5]
