@@ -35,6 +35,7 @@ dependencies:
 - containers >= 0.6.5.1
 - haskeline >= 0.8.2
 - time >= 1.9.3
+- vector >= 0.12.3.0
 
 ghc-options:
 - -Wall
@@ -45,8 +46,13 @@ ghc-options:
 - -Wpartial-fields
 - -Wredundant-constraints
 
+
 library:
   source-dirs: src
+
+default-extensions:
+  - OverloadedStrings
+  - BangPatterns
 
 executables:
   # parsec-exe-1:
@@ -154,6 +160,22 @@ tests:
 
   haskell-lox-test-3:
     main:                test_interpreter.hs
+    source-dirs:         test
+    dependencies:
+    - haskell-lox
+    - tasty
+    - HUnit
+    - tasty-hunit
+    - hspec
+    - tasty
+
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+
+  haskell-clox-test-3:
+    main:                test_vm.hs
     source-dirs:         test
     dependencies:
     - haskell-lox
