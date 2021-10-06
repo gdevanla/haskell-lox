@@ -1,6 +1,41 @@
 module PrattParser where
 
 import Control.Monad.State.Strict
+import Text.Parsec.String
+import Text.Parsec.Char
+import qualified Text.Parsec as PS
+import Text.Parsec.Combinator
+import Control.Applicative
+
+
+whitespace :: Parser ()
+whitespace = void $ PS.many $ oneOf " "
+
+lexeme :: Parser a -> Parser a
+lexeme p = p <* whitespace
+
+scanNumber :: Parser Token
+scanNumber = do
+  digits <- lexeme $ PS.many1 digit
+  return $ Number (read digits)
+
+scanOperator :: Parser Token
+scanOperator = choice $ build <$> [
+  (Plus, '+'),
+  (Minus, '-'),
+  (Slash, '/'),
+  (Star, '*'),
+  (Exp, '^'),
+  (LParen, '('),
+  (RParen, ')')
+  ]
+  where
+    build :: (Token, Char) -> Parser Token
+    build (x, y) = lexeme $ x <$ char y
+
+parseExpression :: String -> Either PS.ParseError [Token]
+parseExpression = PS.parse (many1 (PS.try scanNumber <|> scanOperator) <* eof) ""
+
 
 data Token =
   Plus
@@ -56,7 +91,7 @@ nud LParen = do
     _ -> error $ "unexpected token = " ++ show token ++ " found."
 nud _ = error "only literal supported for nud"
 
-prec :: Token -> Int
+prec :: Token -> Double
 prec tok = case tok of
   Number _ -> 0
   LParen -> 0
@@ -67,7 +102,7 @@ prec tok = case tok of
   Star -> 20
   Slash -> 20
   Exp -> 30
-  _ -> error "prec not defined"
+  _ -> error $ "prec not defined for = " ++ show tok
 
 led :: Double -> Token -> TokenS
 led left tok = do
@@ -87,11 +122,10 @@ led left tok = do
     Exp -> do
       right <- expression $ prec tok - 1
       return $ left ** right
-    --(Number x) -> return x
     _ -> error $ show tok ++ "not supported"
 
 
-expression :: Int -> TokenS
+expression :: Double -> TokenS
 expression rbp = do
   token <- nextToken
   left <- nud token
@@ -119,4 +153,4 @@ expr5 = [(Number 1), Plus, (Number 2), Star, (Number 3), Plus, (Number 10), Slas
 expr6 = [(Number 3), Exp, (Number 2), Exp, (Number 3), EndTok]
 expr7 = [LParen, (Number 1), Plus, (Number 2), RParen, Star, (Number 3), Plus, (Number 10), Slash, (Number 5), EndTok]
 
-evalExpression = map (runState (expression 0)) [expr1, expr2, expr3, expr4, expr5, expr6, expr7]
+-- evalExpression = map (runState (expression 0)) [expr1, expr2, expr3, expr4, expr5, expr6, expr7]
