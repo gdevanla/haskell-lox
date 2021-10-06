@@ -6,6 +6,7 @@ import Text.Parsec.Char
 import qualified Text.Parsec as PS
 import Text.Parsec.Combinator
 import Control.Applicative
+import Data.Either
 
 
 whitespace :: Parser ()
@@ -34,7 +35,9 @@ scanOperator = choice $ build <$> [
     build (x, y) = lexeme $ x <$ char y
 
 parseExpression :: String -> Either PS.ParseError [Token]
-parseExpression = PS.parse (many1 (PS.try scanNumber <|> scanOperator) <* eof) ""
+parseExpression inp = do
+  toks <- PS.parse (many1 (PS.try scanNumber <|> scanOperator) <* eof) "" inp
+  return $ toks ++ [EndTok]
 
 
 data Token =
@@ -145,12 +148,23 @@ expression rbp = do
         else return left'
       else return left'
 
-expr1 = [(Number 1), Plus, (Number 2), Plus, (Number 3), Plus, (Number 4), Plus, (Number 5), EndTok]
-expr2 = [(Number 10), Minus, (Number 20), Plus, (Number 10), Plus, (Number 20), EndTok]
-expr3 = [(Number 10), Star, (Number 20), Star, (Number 10), Slash, (Number 5), EndTok]
-expr4 = [(Number 1), Plus, (Number 2), Star, (Number 3), Plus, (Number 10), Slash, (Number 5), EndTok]
-expr5 = [(Number 1), Plus, (Number 2), Star, (Number 3), Plus, (Number 10), Slash, Minus, (Number 5), EndTok]
-expr6 = [(Number 3), Exp, (Number 2), Exp, (Number 3), EndTok]
-expr7 = [LParen, (Number 1), Plus, (Number 2), RParen, Star, (Number 3), Plus, (Number 10), Slash, (Number 5), EndTok]
+-- expr1 = [(Number 1), Plus, (Number 2), Plus, (Number 3), Plus, (Number 4), Plus, (Number 5), EndTok]
+-- expr2 = [(Number 10), Minus, (Number 20), Plus, (Number 10), Plus, (Number 20), EndTok]
+-- expr3 = [(Number 10), Star, (Number 20), Star, (Number 10), Slash, (Number 5), EndTok]
+-- expr4 = [(Number 1), Plus, (Number 2), Star, (Number 3), Plus, (Number 10), Slash, (Number 5), EndTok]
+-- expr5 = [(Number 1), Plus, (Number 2), Star, (Number 3), Plus, (Number 10), Slash, Minus, (Number 5), EndTok]
+-- expr6 = [(Number 3), Exp, (Number 2), Exp, (Number 3), EndTok]
+-- expr7 = [LParen, (Number 1), Plus, (Number 2), RParen, Star, (Number 3), Plus, (Number 10), Slash, (Number 5), EndTok]
 
 -- evalExpression = map (runState (expression 0)) [expr1, expr2, expr3, expr4, expr5, expr6, expr7]
+
+evalExpression exprs = map (evalState (expression 0) . fromRight [] . parseExpression) exprs
+
+evalAll = evalExpression [
+  "1+2+3+4",
+  "10-2+1",
+  "10-5-1",
+  "10+2*3-8",
+  "3^2^3",
+  "(10+2)*3-8"
+  ]
