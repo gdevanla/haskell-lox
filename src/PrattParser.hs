@@ -46,11 +46,21 @@ nud (Number x) = return x
 nud Minus = do
   right <- expression 100  -- add this to prefix map
   return $ -right
+nud LParen = do
+  right <- expression 0
+  token <- currToken
+  case token of
+    RParen -> do
+      void nextToken
+      return right
+    _ -> error $ "unexpected token = " ++ show token ++ " found."
 nud _ = error "only literal supported for nud"
 
 prec :: Token -> Int
 prec tok = case tok of
   Number _ -> 0
+  LParen -> 0
+  RParen -> 0
   EndTok -> 0
   Minus -> 10
   Plus -> 10
@@ -75,7 +85,7 @@ led left tok = do
       right <- expression (prec tok)
       return $ left / right
     Exp -> do
-      right <- expression $ (prec tok) - 1
+      right <- expression $ prec tok - 1
       return $ left ** right
     --(Number x) -> return x
     _ -> error $ show tok ++ "not supported"
@@ -101,12 +111,12 @@ expression rbp = do
         else return left'
       else return left'
 
-
-expr1 = [(Number 1), Plus, (Number 2), Plus,  (Number 3), Plus, (Number 4), Plus, (Number 5), EndTok]
+expr1 = [(Number 1), Plus, (Number 2), Plus, (Number 3), Plus, (Number 4), Plus, (Number 5), EndTok]
 expr2 = [(Number 10), Minus, (Number 20), Plus, (Number 10), Plus, (Number 20), EndTok]
 expr3 = [(Number 10), Star, (Number 20), Star, (Number 10), Slash, (Number 5), EndTok]
 expr4 = [(Number 1), Plus, (Number 2), Star, (Number 3), Plus, (Number 10), Slash, (Number 5), EndTok]
 expr5 = [(Number 1), Plus, (Number 2), Star, (Number 3), Plus, (Number 10), Slash, Minus, (Number 5), EndTok]
 expr6 = [(Number 3), Exp, (Number 2), Exp, (Number 3), EndTok]
+expr7 = [LParen, (Number 1), Plus, (Number 2), RParen, Star, (Number 3), Plus, (Number 10), Slash, (Number 5), EndTok]
 
-evalExpression = map (runState (expression 0)) [expr1, expr2, expr3, expr4, expr5, expr6]
+evalExpression = map (runState (expression 0)) [expr1, expr2, expr3, expr4, expr5, expr6, expr7]
