@@ -7,6 +7,7 @@ data Token =
   | Minus
   | Star
   | Slash
+  | Exp
   | Number !Double
   | LParen
   | RParen
@@ -55,6 +56,7 @@ prec tok = case tok of
   Plus -> 10
   Star -> 20
   Slash -> 20
+  Exp -> 30
   _ -> error "prec not defined"
 
 led :: Double -> Token -> TokenS
@@ -72,6 +74,9 @@ led left tok = do
     Slash -> do
       right <- expression (prec tok)
       return $ left / right
+    Exp -> do
+      right <- expression $ (prec tok) - 1
+      return $ left ** right
     --(Number x) -> return x
     _ -> error $ show tok ++ "not supported"
 
@@ -102,5 +107,6 @@ expr2 = [(Number 10), Minus, (Number 20), Plus, (Number 10), Plus, (Number 20), 
 expr3 = [(Number 10), Star, (Number 20), Star, (Number 10), Slash, (Number 5), EndTok]
 expr4 = [(Number 1), Plus, (Number 2), Star, (Number 3), Plus, (Number 10), Slash, (Number 5), EndTok]
 expr5 = [(Number 1), Plus, (Number 2), Star, (Number 3), Plus, (Number 10), Slash, Minus, (Number 5), EndTok]
+expr6 = [(Number 3), Exp, (Number 2), Exp, (Number 3), EndTok]
 
-evalExpression = map (runState (expression 0)) [expr1, expr2, expr3, expr4, expr5]
+evalExpression = map (runState (expression 0)) [expr1, expr2, expr3, expr4, expr5, expr6]
