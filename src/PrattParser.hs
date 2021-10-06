@@ -10,6 +10,7 @@ data Token =
   | Number !Double
   | LParen
   | RParen
+  | EndTok
   deriving (Eq, Show)
 
 
@@ -46,6 +47,7 @@ nud _ = error "only literal supported for nud"
 prec :: Token -> Int
 prec tok = case tok of
   Number _ -> 0
+  EndTok -> 0
   Minus -> 10
   Plus -> 10
   Star -> 20
@@ -92,9 +94,9 @@ expression rbp = do
       else return left'
 
 
-expr1 = [(Number 1), Plus, (Number 2), Plus,  (Number 3), Plus, (Number 4), Plus, (Number 5), (Number 5)]
-expr2 = [(Number 10), Minus, (Number 20), Plus, (Number 10), Plus, (Number 20), (Number 0)]
-expr3 = [(Number 10), Star, (Number 20), Star, (Number 10), Slash, (Number 5), (Number 0)]
-expr4 = [(Number 1), Plus, (Number 2), Star, (Number 3), Plus, (Number 10), Slash, (Number 5), (Number 0)]
+expr1 = [(Number 1), Plus, (Number 2), Plus,  (Number 3), Plus, (Number 4), Plus, (Number 5), EndTok]
+expr2 = [(Number 10), Minus, (Number 20), Plus, (Number 10), Plus, (Number 20), EndTok]
+expr3 = [(Number 10), Star, (Number 20), Star, (Number 10), Slash, (Number 5), EndTok]
+expr4 = [(Number 1), Plus, (Number 2), Star, (Number 3), Plus, (Number 10), Slash, (Number 5), EndTok]
 
-evalExpression expr = runState (expression 0) expr
+evalExpression expr = map (runState (expression 0)) [expr1, expr2, expr3, expr4]
