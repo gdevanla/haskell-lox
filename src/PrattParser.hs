@@ -132,20 +132,14 @@ expression :: Double -> TokenS
 expression rbp = do
   token <- nextToken
   left <- nud token
-  h <- hasToken
-  if h then do
-    nt1 <- currToken
-    go left nt1
-    else return left
+  nt1 <- currToken
+  go left nt1
   where
     go left' nt' = if rbp < prec nt' then do
-      h <- hasToken
-      if h then do
         void nextToken
         left'' <- led left' nt'
         nt'' <- currToken
         go left'' nt''
-        else return left'
       else return left'
 
 -- expr1 = [(Number 1), Plus, (Number 2), Plus, (Number 3), Plus, (Number 4), Plus, (Number 5), EndTok]
