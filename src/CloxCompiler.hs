@@ -1,17 +1,16 @@
 module CloxCompiler where
 
-import Control.Monad.State.Strict
-import Text.Parsec.String
-import Text.Parsec.Char
-import qualified Text.Parsec as PS
-import Text.Parsec.Combinator
 import Control.Applicative
+import Control.Monad.State.Strict
 import Data.Either
-import Data.Sequence as Seq
-import System.IO (putStr)
-import Data.Text as T
 import Data.List as L
-
+import Data.Sequence as Seq
+import Data.Text as T
+import System.IO (putStr)
+import qualified Text.Parsec as PS
+import Text.Parsec.Char
+import Text.Parsec.Combinator
+import Text.Parsec.String
 import CloxByteCode
 
 -- import Scanner
