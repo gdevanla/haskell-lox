@@ -23,14 +23,19 @@ data VM = VM {
              }
           deriving (Show, Eq)
 
-push vm@VM{..} value = vm {stack=value:stack}
+push :: Value -> CloxIO ()
+push value = do
+  vm <- get
+  put $ vm {stack=value:stack vm}
 
 type CloxIO a = ExceptT T.Text (StateT VM IO) a
 
-pop vm@VM{..} = let
-  x:xs = stack
-  in
-  (vm {stack=stack}, x)
+pop :: CloxIO Value
+pop  = do
+  vm <- get
+  let x:xs = stack vm
+  put $ vm {stack=xs}
+  return x
 
 data InterpretResult =
   InterpretOK
@@ -53,11 +58,20 @@ interpret = do
 interpretByteCode :: OpCode -> CloxIO InterpretResult
 interpretByteCode (OpConstant (DValue v)) = do
   liftIO $ print $ show v
+  push (DValue v)
   -- liftIO $ putStrLn ("\n"::[Char])
   return InterpretNoResult
 interpretByteCode OpReturn = return InterpretOK
+interpretByteCode OpNegate = do
+  (DValue v) <- pop
+  liftIO $ print $ show (-v)
+  return InterpretNoResult
+
 
 runInterpreter :: IO ()
 runInterpreter = do
   let chunk = Chunk (Seq.Empty |> OpConstant (DValue 100.0))
+  void $ (runStateT . runExceptT $ interpret) (initVM chunk)
+
+  let chunk = Chunk (Seq.Empty |> OpConstant (DValue 100.0) |> OpNegate)
   void $ (runStateT . runExceptT $ interpret) (initVM chunk)

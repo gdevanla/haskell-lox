@@ -229,7 +229,6 @@ interpretDeclaration (DeclVar (Decl var Nothing)) = do
   s <- get
   put (insertEnv var LoxValueNil s)
   return LoxValueSentinel
-
 interpretDeclaration (DeclStatement stmt) = interpretStmt stmt
 
 interpretProgram :: Program -> InterpreterTIO
