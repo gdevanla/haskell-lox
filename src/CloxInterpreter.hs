@@ -33,7 +33,7 @@ type CloxIO a = ExceptT T.Text (StateT VM IO) a
 pop :: CloxIO Value
 pop  = do
   vm <- get
-  let x:xs = stack vm
+  let x:xs = stack vm  -- handle exhaustive patterns while pop too many values
   put $ vm {stack=xs}
   return x
 
@@ -66,6 +66,20 @@ interpretByteCode OpNegate = do
   (DValue v) <- pop
   liftIO $ print $ show (-v)
   return InterpretNoResult
+interpretByteCode OpAdd = interpretBinOp (+)
+interpretByteCode OpMinus = interpretBinOp (-)
+interpretByteCode OpStar = interpretBinOp (*)
+interpretByteCode OpSlash = interpretBinOp (/)
+interpretByteCode OpExp = interpretBinOp (**)
+
+interpretBinOp :: (Double -> Double -> Double) -> CloxIO InterpretResult
+interpretBinOp func = do
+  (DValue v1) <- pop
+  (DValue v2) <- pop
+  let result = func v1 v2
+  push (DValue result)
+  liftIO $ print $ show result
+  return InterpretNoResult
 
 
 runInterpreter :: IO ()
@@ -74,4 +88,10 @@ runInterpreter = do
   void $ (runStateT . runExceptT $ interpret) (initVM chunk)
 
   let chunk = Chunk (Seq.Empty |> OpConstant (DValue 100.0) |> OpNegate)
+  void $ (runStateT . runExceptT $ interpret) (initVM chunk)
+
+  let chunk = Chunk (Seq.Empty |> OpConstant (DValue 100.0) |> OpConstant (DValue 100.0) |> OpAdd)
+  void $ (runStateT . runExceptT $ interpret) (initVM chunk)
+
+  let chunk = Chunk (Seq.Empty |> OpConstant (DValue 2) |> OpConstant (DValue 2) |> OpAdd |> OpConstant (DValue 10) |> OpExp)
   void $ (runStateT . runExceptT $ interpret) (initVM chunk)
