@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 module CloxInterpreter where
 
+import Control.Monad
 import Control.Monad.State.Strict
 import Text.Parsec.String
 import Text.Parsec.Char
@@ -19,8 +20,9 @@ import CloxCompiler
 
 data VM = VM {
              chunk :: !Chunk,
-             index:: !Int,  --probably not needed but closer to the book
-             stack:: [Value]
+             index :: !Int,  --probably not needed but closer to the book
+             stack :: [Value],
+             debugMode :: Bool
              }
           deriving (Show, Eq)
 
@@ -46,7 +48,7 @@ data InterpretResult =
 
 
 initVM :: Chunk -> VM
-initVM chunk = VM {stack=[], chunk=chunk, index=0}
+initVM chunk = VM {stack=[], chunk=chunk, index=0, debugMode=False}
 
 freeVM :: VM
 freeVM = undefined
@@ -58,7 +60,8 @@ interpret = do
 
 interpretByteCode :: OpCode -> CloxIO InterpretResult
 interpretByteCode (OpConstant (DValue v)) = do
-  liftIO $ print $ show v
+  -- liftIO $ print $ show v
+  -- debugPrint v
   push (DValue v)
   -- liftIO $ putStrLn ("\n"::[Char])
   return InterpretNoResult
@@ -79,8 +82,14 @@ interpretBinOp func = do
   (DValue v2) <- pop
   let result = func v1 v2
   push (DValue result)
-  liftIO $ print $ show result
+  -- liftIO $ print $ show result
+  -- debugPrint result
   return InterpretNoResult
+
+debugPrint :: (Show a)=> a -> CloxIO ()
+debugPrint r = do
+  s <- get
+  when (debugMode s) $ liftIO $ print r
 
 -- runInterpreter :: IO ()
 -- runInterpreter = do
@@ -98,4 +107,6 @@ interpretBinOp func = do
 
 runInterpreter :: IO ()
 runInterpreter = do
-  mapM_ ((runStateT . runExceptT $ interpret) . initVM) evalAll
+  ((a, s): _) <- mapM ((runStateT . runExceptT $ interpret) . initVM) evalAll
+  print s
+  -- return ()
