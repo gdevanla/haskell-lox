@@ -15,6 +15,7 @@ import Data.List as L
 import Control.Monad.Except
 
 import CloxByteCode
+import CloxCompiler
 
 data VM = VM {
              chunk :: !Chunk,
@@ -81,17 +82,20 @@ interpretBinOp func = do
   liftIO $ print $ show result
   return InterpretNoResult
 
+-- runInterpreter :: IO ()
+-- runInterpreter = do
+--   let chunk = Chunk (Seq.Empty |> OpConstant (DValue 100.0))
+--   void $ (runStateT . runExceptT $ interpret) (initVM chunk)
+
+--   let chunk = Chunk (Seq.Empty |> OpConstant (DValue 100.0) |> OpNegate)
+--   void $ (runStateT . runExceptT $ interpret) (initVM chunk)
+
+--   let chunk = Chunk (Seq.Empty |> OpConstant (DValue 100.0) |> OpConstant (DValue 100.0) |> OpAdd)
+--   void $ (runStateT . runExceptT $ interpret) (initVM chunk)
+
+--   let chunk = Chunk (Seq.Empty |> OpConstant (DValue 2) |> OpConstant (DValue 2) |> OpAdd |> OpConstant (DValue 10) |> OpExp)
+--   void $ (runStateT . runExceptT $ interpret) (initVM chunk)
 
 runInterpreter :: IO ()
 runInterpreter = do
-  let chunk = Chunk (Seq.Empty |> OpConstant (DValue 100.0))
-  void $ (runStateT . runExceptT $ interpret) (initVM chunk)
-
-  let chunk = Chunk (Seq.Empty |> OpConstant (DValue 100.0) |> OpNegate)
-  void $ (runStateT . runExceptT $ interpret) (initVM chunk)
-
-  let chunk = Chunk (Seq.Empty |> OpConstant (DValue 100.0) |> OpConstant (DValue 100.0) |> OpAdd)
-  void $ (runStateT . runExceptT $ interpret) (initVM chunk)
-
-  let chunk = Chunk (Seq.Empty |> OpConstant (DValue 2) |> OpConstant (DValue 2) |> OpAdd |> OpConstant (DValue 10) |> OpExp)
-  void $ (runStateT . runExceptT $ interpret) (initVM chunk)
+  mapM_ ((runStateT . runExceptT $ interpret) . initVM) evalAll

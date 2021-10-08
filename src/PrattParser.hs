@@ -52,7 +52,6 @@ data Token =
   | EndTok
   deriving (Eq, Show)
 
-
 type TokenS = State [Token] Double
 
 nextToken :: State [Token] Token
@@ -82,10 +81,10 @@ hasToken = do
 nud :: Token -> State [Token] Double
 nud (Number x) = return x
 nud Minus = do
-  right <- expression 100  -- add this to prefix map
+  right <- precedenceParser 100  -- add this to prefix map
   return $ -right
 nud LParen = do
-  right <- expression 0
+  right <- precedenceParser 0
   token <- currToken
   case token of
     RParen -> do
@@ -94,8 +93,8 @@ nud LParen = do
     _ -> error $ "unexpected token = " ++ show token ++ " found."
 nud _ = error "only literal supported for nud"
 
-prec :: Token -> Double
-prec tok = case tok of
+infixPrecedence :: Token -> Double
+infixPrecedence tok = case tok of
   Number _ -> 0
   LParen -> 0
   RParen -> 0
@@ -111,31 +110,31 @@ led :: Double -> Token -> TokenS
 led left tok = do
   case tok of
     Plus -> do
-      right <- expression (prec tok)
+      right <- precedenceParser (infixPrecedence tok)
       return $ left + right
     Minus -> do
-      right <- expression (prec tok)
+      right <- precedenceParser (infixPrecedence tok)
       return $ left - right
     Star -> do
-      right <- expression (prec tok)
+      right <- precedenceParser (infixPrecedence tok)
       return $ left * right
     Slash -> do
-      right <- expression (prec tok)
+      right <- precedenceParser (infixPrecedence tok)
       return $ left / right
     Exp -> do
-      right <- expression $ prec tok - 1
+      right <- precedenceParser $ infixPrecedence tok - 1
       return $ left ** right
     _ -> error $ show tok ++ "not supported"
 
 
-expression :: Double -> TokenS
-expression rbp = do
+precedenceParser :: Double -> TokenS
+precedenceParser rbp = do
   token <- nextToken
   left <- nud token
   nt1 <- currToken
   go left nt1
   where
-    go left' nt' = if rbp < prec nt' then do
+    go left' nt' = if rbp < infixPrecedence nt' then do
         void nextToken
         left'' <- led left' nt'
         nt'' <- currToken
@@ -152,7 +151,8 @@ expression rbp = do
 
 -- evalExpression = map (runState (expression 0)) [expr1, expr2, expr3, expr4, expr5, expr6, expr7]
 
-evalExpression exprs = map (evalState (expression 0) . fromRight [] . parseExpression) exprs
+evalExpression :: [String] -> [Double]
+evalExpression = map (evalState (precedenceParser 0) . fromRight [] . parseExpression)
 
 evalAll = evalExpression [
   "1+2+3+4",
