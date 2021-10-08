@@ -48,7 +48,7 @@ data InterpretResult =
 
 
 initVM :: Chunk -> VM
-initVM chunk = VM {stack=[], chunk=chunk, index=0, debugMode=False}
+initVM chunk = VM {stack=[], chunk=chunk, index=0, debugMode=True}
 
 freeVM :: VM
 freeVM = undefined
@@ -60,8 +60,8 @@ interpret = do
 
 interpretByteCode :: OpCode -> CloxIO InterpretResult
 interpretByteCode (OpConstant (DValue v)) = do
-  -- liftIO $ print $ show v
-  -- debugPrint v
+  --liftIO $ print $ show v
+  debugPrint v
   push (DValue v)
   -- liftIO $ putStrLn ("\n"::[Char])
   return InterpretNoResult
@@ -83,7 +83,7 @@ interpretBinOp func = do
   let result = func v1 v2
   push (DValue result)
   -- liftIO $ print $ show result
-  -- debugPrint result
+  debugPrint result
   return InterpretNoResult
 
 debugPrint :: (Show a)=> a -> CloxIO ()
@@ -105,8 +105,8 @@ debugPrint r = do
 --   let chunk = Chunk (Seq.Empty |> OpConstant (DValue 2) |> OpConstant (DValue 2) |> OpAdd |> OpConstant (DValue 10) |> OpExp)
 --   void $ (runStateT . runExceptT $ interpret) (initVM chunk)
 
-runInterpreter :: IO ()
-runInterpreter = do
-  ((a, s): _) <- mapM ((runStateT . runExceptT $ interpret) . initVM) evalExpressions
-  print s
-  -- return ()
+runInterpreter :: [Chunk] -> IO VM
+runInterpreter chunk = do
+  ((a, s): _) <- mapM ((runStateT . runExceptT $ interpret) . initVM) chunk
+  -- print s
+  return s

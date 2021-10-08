@@ -77,13 +77,13 @@ led left tok = do
       return $ left ++ right ++ [OpAdd]
     MINUS -> do
       right <- expression (prec tok)
-      return $ left ++ right ++ [OpMinus]
+      return $ right ++ left ++ [OpMinus]
     STAR -> do
       right <- expression (prec tok)
       return $ left ++ right ++ [OpStar]
     SLASH -> do
       right <- expression (prec tok)
-      return $ left ++ right ++ [OpSlash]
+      return $ right ++ left ++ [OpSlash]
     _ -> error $ show tok ++ "not supported"
 
 
