@@ -107,6 +107,6 @@ debugPrint r = do
 
 runInterpreter :: IO ()
 runInterpreter = do
-  ((a, s): _) <- mapM ((runStateT . runExceptT $ interpret) . initVM) evalAll
+  ((a, s): _) <- mapM ((runStateT . runExceptT $ interpret) . initVM) evalExpressions
   print s
   -- return ()

@@ -189,3 +189,19 @@ tests:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+
+  test-compiler:
+    main:                test_compiler.hs
+    source-dirs:         test
+    dependencies:
+    - haskell-lox
+    - tasty
+    - HUnit
+    - tasty-hunit
+    - hspec
+    - tasty
+
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N

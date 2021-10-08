@@ -154,11 +154,12 @@ precedenceParser rbp = do
 evalExpression :: [String] -> [Double]
 evalExpression = map (evalState (precedenceParser 0) . fromRight [] . parseExpression)
 
-evalAll = evalExpression [
-  "1+2+3+4",
-  "10-2+1",
-  "10-5-1",
-  "10+2*3-8",
-  "3^2^3",
-  "(10+2)*3-8"
-  ]
+evalAll =
+  evalExpression
+    [ "1+2+3+4",
+      "10-2+1",
+      "10-5-1",
+      "10+2*3-8",
+      "3^2^3",
+      "(10+2)*3-8"
+    ]

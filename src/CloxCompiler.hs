@@ -111,21 +111,30 @@ expression rbp = do
 
 -- evalExpression = map (runState (expression 0)) [expr1, expr2, expr3, expr4, expr5, expr6, expr7]
 
-evalExpression exprs = let
-  opcodes = L.map (evalState (expression 0) . fromRight [] . scanner) exprs
-  in
-  L.map (Chunk . Seq.fromList) opcodes
+compileToByteCode :: T.Text -> [OpCode]
+compileToByteCode = evalState (expression 0) . fromRight [] . scanner . T.unpack
 
-evalAll = evalExpression [
-  "1+2+3+4;",
-  "10-2+1;",
-  "10-5-1;",
-  "10+2*3-8;",
-  -- "3^2^3;",
-  "(10+2)*3-8;"
-  ]
+evalExpression :: String -> Chunk
+evalExpression expr = let
+  a = (evalState (expression 0) . fromRight [] . scanner) expr
+  in
+  Chunk $ Seq.fromList a
+
+
+evalExpressions :: [Chunk]
+evalExpressions = let
+  expressions =
+    [ "1+2+3+4",
+      "10-2+1",
+      "10-5-1",
+      "10+2*3-8",
+      "3^2^3",
+      "(10+2)*3-8"
+    ]
+   in
+    L.map evalExpression expressions
 
 evalAndPrint:: IO ()
 evalAndPrint = do
-  let results = L.zipWith disassembleChunk evalAll (L.map (T.pack . show)([1..]::[Int]))
+  let results = L.zipWith disassembleChunk evalExpressions (L.map (T.pack . show)([1..]::[Int]))
   mapM_ (System.IO.putStr . T.unpack . uncurry (<>)) results
