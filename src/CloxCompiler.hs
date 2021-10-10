@@ -14,28 +14,33 @@ import Text.Parsec.String
 import Text.Parsec.Pos
 import CloxByteCode
 
+import Import
+import Text.Parsec
+
 import Scanner
 
-type TokenS = State [LoxTokInfo] [OpCode]
+-- type TokenS = State [LoxTokInfo] [OpCode]
 
-nextToken :: State [LoxTokInfo] LoxTokInfo
+type CloxParser a = ParsecT [LoxTokInfo] () Identity a
+
+nextToken :: CloxParser LoxTokInfo
 nextToken = do
-  s <- get
-  case s of
+  s <- getParserState
+  case stateInput s of
     (x:xs) -> do
-      put xs
+      void $ updateParserState (\s'-> s'{stateInput=xs})
       return x
     -- _ -> return $ LoxTokInfo EOF Nothing Nothing (newPos "" 0 0)
     _ -> error "Token list is empty in nextToken"
 
-currToken :: State [LoxTokInfo] LoxTokInfo
+currToken :: CloxParser LoxTokInfo
 currToken = do
-  s <- get
-  case s of
+  s <- getParserState
+  case stateInput s of
     (x:_) -> return x
     _ ->  error "No more tokens"
 
-nud :: LoxTokInfo -> State [LoxTokInfo] [OpCode]
+nud :: LoxTokInfo -> CloxParser [OpCode]
 nud (LoxTokInfo (NUMBER !x) _ _ _) = return [OpConstant (DValue x)]
 nud tok@(LoxTokInfo MINUS _ _ _) = do
   right <- expression (prefixPrec tok)
@@ -69,7 +74,7 @@ prefixPrec tok = case tokinfo_type tok of
   MINUS -> 10
   _ -> error $ "prefix_prec not defined for = " ++ show tok
 
-led :: [OpCode] -> LoxTokInfo -> TokenS
+led :: [OpCode] -> LoxTokInfo -> CloxParser [OpCode]
 led left tok = do
   case tokinfo_type tok of
     PLUS -> do
@@ -87,7 +92,7 @@ led left tok = do
     _ -> error $ show tok ++ "not supported"
 
 
-expression :: Double -> TokenS
+expression :: Double -> CloxParser [OpCode]
 expression rbp = do
   token <- nextToken
   left <- nud token
@@ -111,25 +116,27 @@ expression rbp = do
 
 -- evalExpression = map (runState (expression 0)) [expr1, expr2, expr3, expr4, expr5, expr6, expr7]
 
-compileToByteCode :: T.Text -> [OpCode]
-compileToByteCode = evalState (expression 0) . fromRight [] . scanner . T.unpack
+compileToByteCode :: T.Text -> Either ParseError [OpCode]
+compileToByteCode = parse (expression 0) "" . (fromRight [] . scanner . T.unpack)
 
 evalExpression :: String -> Chunk
 evalExpression expr = let
-  a = (evalState (expression 0) . fromRight [] . scanner) expr
+  a = parse (expression 0) ""  . (fromRight [] . scanner) $ expr
   in
-  Chunk $ Seq.fromList a
+  case a of
+    Right z -> Chunk $ Seq.fromList z
+    Left e -> error $ "Not expecting an error" ++ show e
 
 
 evalExpressions :: [Chunk]
 evalExpressions = let
   expressions =
-    [ "1+2+3+4",
-      "10-2+1",
-      "10-5-1",
-      "10+2*3-8",
-      "3^2^3",
-      "(10+2)*3-8"
+    [ "1+2+3+4;",
+      "10-2+1;",
+      "10-5-1;",
+      "10+2*3-8;",
+      --"3^2^3;",
+      "(10+2)*3-8;"
     ]
    in
     L.map evalExpression expressions
