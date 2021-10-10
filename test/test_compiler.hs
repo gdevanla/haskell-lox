@@ -20,7 +20,7 @@ import CloxCompiler
 import Data.Sequence
 
 test_compiler input expected = testCase input $ do
-  let opcodes = compileToByteCode . T.pack $ input
+  let opcodes = fromRight [] $ compileToByteCode . T.pack $ input
   -- putStrLn . show $ opcodes
   assertEqual "" opcodes expected
 
@@ -39,7 +39,7 @@ testData = let
       "10-5-1;",
       "10+2*3-8;",
       "(10+2)*3-8;"
-    ]
+      ]
   in
   L.zip expressions expected
 

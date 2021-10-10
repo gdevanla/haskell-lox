@@ -23,7 +23,7 @@ import CloxInterpreter
 import Data.Sequence
 
 test_compiler input expected = testCase input $ do
-  let opcodes = compileToByteCode . T.pack $ input
+  let opcodes = fromRight [] $ compileToByteCode . T.pack $ input
   vm <- runInterpreter [Chunk (Seq.fromList opcodes)]
   let actual_stack = stack vm
   assertEqual "" expected actual_stack
