@@ -16,19 +16,19 @@ import Data.Text as T
 import Data.Sequence as Seq
 
 import CloxByteCode
-import CloxCompiler
+--import CloxCompiler
+import CloxByteCodeGen
 import CloxInterpreter
 
 
 import Data.Sequence
 
 test_compiler input expected = testCase input $ do
-  let opcodes = fromRight [] $ compileToByteCode . T.pack $ input
+  opcodes' <- compileToByteCode . T.pack $ input
+  let opcodes = fromRight [] $ opcodes'
   vm <- runInterpreter [Chunk (Seq.fromList opcodes)]
   let actual_stack = stack vm
   assertEqual "" expected actual_stack
-
-
 
 testData = let
   expected = [

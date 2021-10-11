@@ -289,7 +289,11 @@ whileStmt = do
 
 
 loxStatement :: Parser Statement
-loxStatement = StmtExpr <$> (try loxExpr <* semi) <|> StmtPrint <$> (try loxPrintStmt <* semi) <|> try ifStmt <|> try whileStmt <|> loxBlock
+loxStatement = StmtExpr <$> (try loxExpr <* semi) <|>
+  StmtPrint <$> (try loxPrintStmt <* semi) <|>
+  try ifStmt <|>
+  try whileStmt <|>
+  loxBlock
 
 
 loxBlock :: Parser Statement
@@ -338,7 +342,7 @@ loxDeclaration = do
 
 
 loxDeclarations :: Parser Declaration
-loxDeclarations = try loxDeclaration  <|> DeclStatement <$> loxStatement
+loxDeclarations = try loxDeclaration <|> DeclStatement <$> loxStatement
 
 loxProgram :: Parser Program
 loxProgram = many1 loxDeclarations -- endBy1 loxDeclarations semi

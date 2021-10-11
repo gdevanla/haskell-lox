@@ -71,9 +71,9 @@ interpretByteCode OpNegate = do
   liftIO $ print $ show (-v)
   return InterpretNoResult
 interpretByteCode OpAdd = interpretBinOp (+)
-interpretByteCode OpMinus = interpretBinOp (-)
+interpretByteCode OpMinus = interpretBinOp (flip (-))
 interpretByteCode OpStar = interpretBinOp (*)
-interpretByteCode OpSlash = interpretBinOp (/)
+interpretByteCode OpSlash = interpretBinOp (flip (/))
 interpretByteCode OpExp = interpretBinOp (**)
 
 interpretBinOp :: (Double -> Double -> Double) -> CloxIO InterpretResult

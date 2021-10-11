@@ -8,6 +8,8 @@ import Data.Sequence
 import Data.Text as T
 
 data Value = DValue {-# UNPACK #-} !Double
+             | BValue {-# UNPACK #-} !Bool
+             | NullValue
            deriving (Show, Eq)
 
 data OpCode

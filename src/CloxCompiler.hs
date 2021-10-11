@@ -116,6 +116,7 @@ expression rbp = do
 
 -- evalExpression = map (runState (expression 0)) [expr1, expr2, expr3, expr4, expr5, expr6, expr7]
 
+
 compileToByteCode :: T.Text -> Either ParseError [OpCode]
 compileToByteCode = parse (expression 0) "" . (fromRight [] . scanner . T.unpack)
 
@@ -126,7 +127,6 @@ evalExpression expr = let
   case a of
     Right z -> Chunk $ Seq.fromList z
     Left e -> error $ "Not expecting an error" ++ show e
-
 
 evalExpressions :: [Chunk]
 evalExpressions = let
