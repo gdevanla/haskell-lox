@@ -43,12 +43,14 @@ interpret (Unary op expr) = do
   value <- interpret expr
   case op of
     UnaryMinus -> lift $ return $ value ++ [OpNegate]
-    _ -> error $ show op ++ "not supported under Unary Op"
+    UnaryBang -> lift $ return $ value ++ [OpNot]
     -- UnaryBang -> case value of
     --   LoxValueNil -> lift . return $ LoxValueBool True
     --   LoxValueBool b -> lift .return $ LoxValueBool (not b)
      -- _ ->  lift . return $ LoxValueBool True
   -- lift . return $ LoxValueDouble 200000.0
+    _ -> error $ show op ++ "not supported under Unary Op"
+
 
 interpret (Binary expr1 op expr2) = do
   left <- interpret expr1
@@ -61,12 +63,12 @@ interpret (Binary expr1 op expr2) = do
     Star ->  return $ left ++ right ++ [OpStar]
     Slash -> return $ left ++ right ++ [OpSlash]
     -- comparison operations
-    -- Gt -> applyCompOpToDouble right_expr left_expr Gt (>)
-    -- Gte -> applyCompOpToDouble right_expr left_expr Gt (>=)
-    -- Lt -> applyCompOpToDouble right_expr left_expr Gt (<)
-    -- Lte -> applyCompOpToDouble right_expr left_expr Gt (<=)
-    -- NotEqual -> lift . return $ LoxValueBool $ right_expr /= left_expr
-    -- EqualEqual -> lift .return $ LoxValueBool $ right_expr == left_expr
+    Gt -> return $ left ++ right ++ [OpGt]
+    Gte -> return $ left ++ right ++ [OpLt, OpNot]
+    Lt -> return $ left ++ right ++ [OpLt]
+    Lte -> return $ left ++ right ++ [OpGt, OpNot]
+    NotEqual -> return $ left ++ right ++ [OpEqual, OpNot]
+    EqualEqual -> return $ left ++ right ++ [OpEqual]
     -- -- special case of Plus
     Plus -> return $ left ++ right ++ [OpAdd]
       -- case (right_expr, left_expr) of

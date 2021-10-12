@@ -84,6 +84,37 @@ interpretByteCode OpFalse = do
 interpretByteCode OpNull = do
   push $ NullValue
   return InterpretNoResult
+interpretByteCode OpNot = do
+  x <- pop
+  case x of
+    (BValue x) -> push $ BValue (not x)
+    (NullValue) -> push $ BValue True
+    _ -> push $ BValue False
+  return InterpretNoResult
+interpretByteCode OpEqual = do
+  d1 <- pop
+  d2 <- pop
+  case (d1, d2) of
+    (DValue x, DValue y) -> push $ BValue $ x == y
+    (BValue x, BValue y) -> push $ BValue $ x == y
+    _ -> push (BValue False)
+  return InterpretNoResult
+interpretByteCode OpGt = do
+  d1 <- pop
+  d2 <- pop
+  case (d1, d2) of
+    (DValue x, DValue y) -> push $ BValue $ y > x
+    (BValue x, BValue y) -> push $ BValue $ y > x
+    _ -> error $ "Cannot compare " ++ show d1 ++ "," ++ show d2 ++ " with >"
+  return InterpretNoResult
+interpretByteCode OpLt = do
+  d1 <- pop
+  d2 <- pop
+  case (d1, d2) of
+    (DValue x, DValue y) -> push $ BValue $ y < x
+    (BValue x, BValue y) -> push $ BValue $ y < x
+    _ -> error $ "Cannot compare " ++ show d1 ++ "," ++ show d2 ++ " with <"
+  return InterpretNoResult
 
 
 interpretBinOp :: (Double -> Double -> Double) -> CloxIO InterpretResult
