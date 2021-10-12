@@ -14,6 +14,7 @@ import System.IO (putStr)
 import Data.Text as T
 import Data.List as L
 import Control.Monad.Except
+import Data.Map.Strict as M
 
 import CloxByteCode
 import CloxCompiler
@@ -22,7 +23,8 @@ data VM = VM {
              chunk :: !Chunk,
              index :: !Int,  --probably not needed but closer to the book
              stack :: [Value],
-             debugMode :: Bool
+             debugMode :: Bool,
+             globals:: !(M.Map T.Text Value)
              }
           deriving (Show, Eq)
 
@@ -40,15 +42,28 @@ pop  = do
   put $ vm {stack=xs}
   return x
 
+updateGlobals :: T.Text -> Value -> CloxIO ()
+updateGlobals k v = do
+  vm <- get
+  let gm = globals vm
+  let gm' = M.insert k v gm
+  put $ vm {globals=gm'}
+
+getGlobal :: T.Text -> CloxIO (Maybe Value)
+getGlobal var = M.lookup var . globals <$> get
+
+globalExists :: T.Text -> CloxIO Bool
+globalExists var = M.member var . globals <$> get
+
 data InterpretResult =
   InterpretOK
   | InterpretCompileError
-  | InterpretRuntimeError
+  | InterpretRuntimeError !T.Text
   | InterpretNoResult
 
 
 initVM :: Chunk -> VM
-initVM chunk = VM {stack=[], chunk=chunk, index=0, debugMode=True}
+initVM chunk = VM {stack=[], chunk=chunk, index=0, debugMode=True, globals=M.empty}
 
 freeVM :: VM
 freeVM = undefined
@@ -74,7 +89,9 @@ interpretByteCode (OpConstant (SValue v)) = do
 interpretByteCode OpReturn = return InterpretOK
 interpretByteCode OpNegate = do
   (DValue v) <- pop
-  liftIO $ print $ show (-v)
+  let result = DValue (-v)
+  liftIO $ print $ show result
+  push result
   return InterpretNoResult
 interpretByteCode OpAdd = interpretBinOp (+)
 interpretByteCode OpMinus = interpretBinOp (flip (-))
@@ -88,13 +105,13 @@ interpretByteCode OpFalse = do
   push $ BValue False
   return InterpretNoResult
 interpretByteCode OpNull = do
-  push $ NullValue
+  push NullValue
   return InterpretNoResult
 interpretByteCode OpNot = do
   x <- pop
   case x of
     (BValue x) -> push $ BValue (not x)
-    (NullValue) -> push $ BValue True
+    NullValue -> push $ BValue True
     _ -> push $ BValue False
   return InterpretNoResult
 interpretByteCode OpEqual = do
@@ -123,8 +140,27 @@ interpretByteCode OpLt = do
   return InterpretNoResult
 interpretByteCode OpPrint = do
   r <- pop
-  liftIO $ putStrLn $ show r  -- need to have specialized print for Value type
+  liftIO $ print r  -- need to have specialized print for Value type
   return InterpretNoResult
+interpretByteCode (OpDefineGlobal var) = do
+  val <- pop
+  updateGlobals var val
+  return InterpretNoResult
+interpretByteCode (OpGetGlobal var) = do
+  val <- getGlobal var
+  case val of
+    Just v -> do
+      push v
+      return InterpretNoResult
+    Nothing -> return $ InterpretRuntimeError $ "Key Error" <> var
+interpretByteCode (OpSetGlobal var) = do
+  val <- pop
+  exists <- globalExists var
+  if exists then do
+    updateGlobals var val
+    return InterpretNoResult
+    else return $ InterpretRuntimeError $ "Key assigned before declaration: " <> var
+
 
 interpretBinOp :: (Double -> Double -> Double) -> CloxIO InterpretResult
 interpretBinOp func = do

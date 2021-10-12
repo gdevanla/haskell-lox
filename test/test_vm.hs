@@ -47,7 +47,12 @@ testData = let
     [BValue True],
     [BValue True],
     [SValue "test_var"],
-    [] -- print statement, nothing on stack
+    [], -- print statement, nothing on stack
+    [], -- global definition
+    [], -- var and print
+    [DValue (-20.0)], -- var and print
+    [DValue (-40.0)], -- var and print
+    []
     ]
   expressions = [
       "1+2+3+4;",
@@ -65,7 +70,12 @@ testData = let
       "5<=5;",
       "5>=5;",
       "\"test_var\";",
-      "print 10000+20000;"
+      "print 10000+20000;",
+      "var x = 100;", -- TODO: Add test to check the global hash table
+      "var x = \"print this\";print x;", -- TODO: Add test to check the global hash table
+      "var x=-10;x+x;", -- TODO: Add test to check the global hash table
+      "var x=-10;x=-20;x+x;", -- TODO: Add test to check the global hash table
+      "var x=-10;y=-20;" -- TODO: Check Interpreter return value for RunTimeError
     ]
   in
   L.zip expressions expected

@@ -30,6 +30,10 @@ data OpCode
   | OpGt
   | OpLt
   | OpPrint
+  | OpPop
+  | OpDefineGlobal !T.Text  -- Not storing this in constant unlike in the book
+  | OpGetGlobal !T.Text -- Not storing this in constant unlike in the book
+  | OpSetGlobal !T.Text
   deriving (Show, Eq)
 
 newtype Chunk = Chunk {unChunk :: Seq OpCode}

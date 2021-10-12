@@ -35,11 +35,7 @@ interpret (Literal t) = lift $ return $ [OpConstant (SValue t)]
 interpret (LoxBool t) = lift $ if t then return [OpTrue] else return [OpFalse]
 interpret LoxNil = lift $ return [OpNull]
 interpret (Paren expr) = interpret expr
--- interpret (Identifier i) = do
---   s <- get
---   case lookupEnv i s of
---     Just v -> lift . return $ v
---     Nothing -> ExceptT . return . Left $ "Unknown var: " <> i
+interpret (Identifier i) = return [OpGetGlobal i]
 interpret (Unary op expr) = do
   value <- interpret expr
   case op of
@@ -76,15 +72,17 @@ interpret (Binary expr1 op expr2) = do
       -- (LoxValueString x, LoxValueString y) -> lift .return $ LoxValueString $ x <> y
       -- (LoxValueDouble x, LoxValueDouble y) -> lift . return $ LoxValueDouble $ x + y
       -- (x, y) -> ExceptT . return . Left $ T.pack $ "Unsupported operation (+) on "  ++ show x ++ " and " ++ show y
--- interpret (Assignment lhs rhs) = do
---   s <- get
---   lox_value <- interpret rhs
---   s' <- get  -- need to get an s after all rhs are processed
---   case updateEnv lhs lox_value s' of
---     Just s'' -> do
---       put $ s''
---       lift . return  $ lox_value
---     Nothing -> ExceptT . return . Left $ "Assignment to variable before declaration :" <> lhs
+interpret (Assignment lhs rhs) = do
+  rhs_code <- interpret rhs
+  return $ rhs_code ++ [OpSetGlobal lhs]
+  -- s <- get
+  -- lox_value <- interpret rhs
+  -- s' <- get  -- need to get an s after all rhs are processed
+  -- case updateEnv lhs lox_value s' of
+  --   Just s'' -> do
+  --     put $ s''
+  --     lift . return  $ lox_value
+  --   Nothing -> ExceptT . return . Left $ "Assignment to variable before declaration :" <> lhs
 
 -- interpret (Logical expr1 op expr2) = do
 --   result <- interpret expr1
@@ -135,12 +133,15 @@ interpretStmt (StmtPrint expr) = do
 
 
 interpretDeclaration :: Declaration -> ByteCodeGenT [OpCode]
--- interpretDeclaration (DeclVar (Decl var (Just expr))) = do
---   result <- interpret expr
---   s <- get
---   let s' = insertEnv var result s
---   put s'
---   return LoxValueSentinel
+interpretDeclaration (DeclVar (Decl var (Just expr))) = do
+  result <- interpret expr
+  return $ result ++ [OpDefineGlobal var]
+
+  -- result <- interpret expr
+  -- s <- get
+  -- let s' = insertEnv var result s
+  -- put s'
+  -- return LoxValueSentinel
 -- interpretDeclaration (DeclVar (Decl var Nothing)) = do
 --   s <- get
 --   put (insertEnv var LoxValueNil s)
