@@ -6,6 +6,7 @@ module CloxByteCodeGen
 where
 import System.IO
 import Data.Text as T
+import Data.List as L
 import Import hiding (many, try, (<|>))
 
 import ExprParser
@@ -93,9 +94,72 @@ interpret (Binary expr1 op expr2) = do
 --     _ -> interpret expr2
 interpret x = error $ "not supported " ++ show x
 
+interpretStmt :: Statement -> ByteCodeGenT [OpCode]
+interpretStmt (StmtExpr expr) = interpret expr
+
+interpretStmt (StmtPrint expr) = do
+  result <- interpret expr
+  return $ result ++ [OpPrint]
+
+-- interpretStmt (StmtBlock program) = do
+--   s <- get
+--   let s' = initEnv (Just s)
+--   put s'
+--   result <- interpretProgram program
+--   s'' <- get
+--   case parent s'' of
+--     Just p ->  do
+--       put p
+--       return result
+--     Nothing -> do
+--       let msg = "Unexpected state of environment where parent is missing from passed in child"
+--       liftIO $ print msg
+--       ExceptT . return . Left $ msg
+
+
+-- interpretStmt (StmtIf (IfElse cond ifexpr elseexpr)) = do
+--   cond_result <- interpret cond
+--   if isTruthy cond_result
+--     then interpretStmt ifexpr
+--     else maybe (return LoxValueNil) interpretStmt elseexpr
+
+-- interpretStmt (StmtWhile (While cond stmt)) = go
+--   where
+--     go = do
+--       cond_result <- interpret cond
+--       if isTruthy cond_result then  do
+--         void $ interpretStmt stmt
+--         go
+--         else return LoxValueSentinel
+
+
+
+interpretDeclaration :: Declaration -> ByteCodeGenT [OpCode]
+-- interpretDeclaration (DeclVar (Decl var (Just expr))) = do
+--   result <- interpret expr
+--   s <- get
+--   let s' = insertEnv var result s
+--   put s'
+--   return LoxValueSentinel
+-- interpretDeclaration (DeclVar (Decl var Nothing)) = do
+--   s <- get
+--   put (insertEnv var LoxValueNil s)
+--   return LoxValueSentinel
+interpretDeclaration (DeclStatement stmt) = interpretStmt stmt
+
+-- interpretProgram :: Program -> ByteCodeGenT [OpCode]
+
+interpretProgram :: Program -> ByteCodeGenT [OpCode]
+interpretProgram decls = do
+  opcodes <- mapM interpretDeclaration decls
+  return $ L.concat opcodes
+
 
 compileToByteCode :: T.Text -> IO (Either T.Text [OpCode])
 compileToByteCode input = do
-  let x = fromRight LoxNil $ P.parse equality "" $ fromRight [] . scanner . T.unpack $ input
-  (opcodes, _) <- runStateT (runExceptT (interpret x)) initEnv
+  --let y = scanner . T.unpack $ input
+  --putStrLn $ show y
+  let x = P.parse loxProgram "" $ fromRight [] . scanner . T.unpack $ input
+  liftIO $ putStrLn $ show x
+  (opcodes, _) <- runStateT (runExceptT (interpretProgram (fromRight [] x))) initEnv
   return opcodes

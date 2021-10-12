@@ -29,6 +29,7 @@ data OpCode
   | OpEqual
   | OpGt
   | OpLt
+  | OpPrint
   deriving (Show, Eq)
 
 newtype Chunk = Chunk {unChunk :: Seq OpCode}

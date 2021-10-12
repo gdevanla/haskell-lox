@@ -46,7 +46,8 @@ testData = let
     [BValue False],
     [BValue True],
     [BValue True],
-    [SValue "test_var"]
+    [SValue "test_var"],
+    [] -- print statement, nothing on stack
     ]
   expressions = [
       "1+2+3+4;",
@@ -63,7 +64,8 @@ testData = let
       "5!=5;",
       "5<=5;",
       "5>=5;",
-      "\"test_var\";"
+      "\"test_var\";",
+      "print 10000+20000;"
     ]
   in
   L.zip expressions expected

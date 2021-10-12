@@ -121,7 +121,10 @@ interpretByteCode OpLt = do
     (BValue x, BValue y) -> push $ BValue $ y < x
     _ -> error $ "Cannot compare " ++ show d1 ++ "," ++ show d2 ++ " with <"
   return InterpretNoResult
-
+interpretByteCode OpPrint = do
+  r <- pop
+  liftIO $ putStrLn $ show r  -- need to have specialized print for Value type
+  return InterpretNoResult
 
 interpretBinOp :: (Double -> Double -> Double) -> CloxIO InterpretResult
 interpretBinOp func = do
