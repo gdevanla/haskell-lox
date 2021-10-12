@@ -9,6 +9,7 @@ import Data.Text as T
 
 data Value = DValue {-# UNPACK #-} !Double
              | BValue {-# UNPACK #-} !Bool
+             | SValue !T.Text
              | NullValue
            deriving (Show, Eq)
 

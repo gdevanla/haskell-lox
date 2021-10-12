@@ -30,7 +30,7 @@ type ByteCodeGenT a = ExceptT T.Text (StateT Env IO) a
 
 interpret :: Expr -> ByteCodeGenT [OpCode]
 interpret (Number x) = lift $ return [OpConstant (DValue x)]
--- interpret (Literal t) = lift $ return $ LoxValueString t
+interpret (Literal t) = lift $ return $ [OpConstant (SValue t)]
 interpret (LoxBool t) = lift $ if t then return [OpTrue] else return [OpFalse]
 interpret LoxNil = lift $ return [OpNull]
 interpret (Paren expr) = interpret expr
@@ -91,6 +91,8 @@ interpret (Binary expr1 op expr2) = do
 --     (Or, True) -> return result
 --     (And, False) -> return result
 --     _ -> interpret expr2
+interpret x = error $ "not supported " ++ show x
+
 
 compileToByteCode :: T.Text -> IO (Either T.Text [OpCode])
 compileToByteCode input = do

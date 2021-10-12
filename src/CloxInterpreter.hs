@@ -65,6 +65,12 @@ interpretByteCode (OpConstant (DValue v)) = do
   push (DValue v)
   -- liftIO $ putStrLn ("\n"::[Char])
   return InterpretNoResult
+interpretByteCode (OpConstant (SValue v)) = do
+  --liftIO $ print $ show v
+  debugPrint v
+  push (SValue v)
+  -- liftIO $ putStrLn ("\n"::[Char])
+  return InterpretNoResult
 interpretByteCode OpReturn = return InterpretOK
 interpretByteCode OpNegate = do
   (DValue v) <- pop

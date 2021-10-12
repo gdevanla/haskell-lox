@@ -45,7 +45,8 @@ testData = let
     [BValue True],
     [BValue False],
     [BValue True],
-    [BValue True]
+    [BValue True],
+    [SValue "test_var"]
     ]
   expressions = [
       "1+2+3+4;",
@@ -61,7 +62,8 @@ testData = let
       "5==5;",
       "5!=5;",
       "5<=5;",
-      "5>=5;"
+      "5>=5;",
+      "\"test_var\";"
     ]
   in
   L.zip expressions expected
