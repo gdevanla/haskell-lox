@@ -31,8 +31,8 @@ type ByteCodeGenT a = ExceptT T.Text (StateT Env IO) a
 interpret :: Expr -> ByteCodeGenT [OpCode]
 interpret (Number x) = lift $ return [OpConstant (DValue x)]
 -- interpret (Literal t) = lift $ return $ LoxValueString t
-interpret (LoxBool t) = lift $ return [OpConstant (BValue t)]
-interpret LoxNil = lift $ return [OpConstant NullValue]
+interpret (LoxBool t) = lift $ if t then return [OpTrue] else return [OpFalse]
+interpret LoxNil = lift $ return [OpNull]
 interpret (Paren expr) = interpret expr
 -- interpret (Identifier i) = do
 --   s <- get

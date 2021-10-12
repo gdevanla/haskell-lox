@@ -75,6 +75,16 @@ interpretByteCode OpMinus = interpretBinOp (flip (-))
 interpretByteCode OpStar = interpretBinOp (*)
 interpretByteCode OpSlash = interpretBinOp (flip (/))
 interpretByteCode OpExp = interpretBinOp (**)
+interpretByteCode OpTrue = do
+  push $ BValue True
+  return InterpretNoResult
+interpretByteCode OpFalse = do
+  push $ BValue False
+  return InterpretNoResult
+interpretByteCode OpNull = do
+  push $ NullValue
+  return InterpretNoResult
+
 
 interpretBinOp :: (Double -> Double -> Double) -> CloxIO InterpretResult
 interpretBinOp func = do

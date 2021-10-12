@@ -21,6 +21,9 @@ data OpCode
   | OpStar
   | OpSlash
   | OpExp
+  | OpTrue
+  | OpFalse
+  | OpNull
   deriving (Show, Eq)
 
 newtype Chunk = Chunk {unChunk :: Seq OpCode}
