@@ -38,7 +38,14 @@ testData = let
     [DValue 8.0],
     [DValue 28.0],
     [DValue 22.0],
-    [DValue 1.0]
+    [DValue 1.0],
+    [BValue True],
+    [BValue True],
+    [BValue True],
+    [BValue True],
+    [BValue False],
+    [BValue True],
+    [BValue True]
     ]
   expressions = [
       "1+2+3+4;",
@@ -47,7 +54,14 @@ testData = let
       "10+2*3-8;",
       "(10+2)*3-8;",
       "10*2+4/2;",
-      "10/2-4;"
+      "10/2-4;",
+      "true;",
+      "1<2;",
+      "2>1;",
+      "5==5;",
+      "5!=5;",
+      "5<=5;",
+      "5>=5;"
     ]
   in
   L.zip expressions expected
