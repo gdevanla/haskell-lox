@@ -85,10 +85,10 @@ testData = let
       "var x=5>=5;",
       "var x=\"test_var\";",
       "print 10000+20000;",
-      "var x = \"print this\";print x;", -- TODO: Add test to check the global hash table
-      "var x=-10;x=x+x;", -- TODO: Add test to check the global hash table
-      "var x=-10;x=-20;x=x+x;", -- TODO: Add test to check the global hash table
-      "var x=-10;var y=-20;" -- TODO: Check Interpreter return value for RunTimeError
+      "var x = \"print this\";print x;",
+      "var x=-10;x=x+x;",
+      "var x=-10;x=-20;x=x+x;",
+      "var x=-10;var y=-20;"
     ]
   in
   L.zip expressions expected
