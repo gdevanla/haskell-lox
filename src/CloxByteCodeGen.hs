@@ -178,10 +178,15 @@ interpretDeclaration (DeclVar (Decl var (Just expr))) = do
     let scope = scope_depth env
     put $ env {locals = Local var scope:locals env}
     return result
--- interpretDeclaration (DeclVar (Decl var Nothing)) = do
---   s <- get
---   put (insertEnv var LoxValueNil s)
---   return LoxValueSentinel
+interpretDeclaration (DeclVar (Decl var Nothing)) = do
+  let result = [OpConstant NullValue]
+  env <- get
+  if scope_depth env == 0 then return $ result ++ [OpDefineGlobal var]
+    else do
+    let scope = scope_depth env
+    put $ env {locals = Local var scope:locals env}
+    return result
+
 interpretDeclaration (DeclStatement stmt) = interpretStmt stmt
 
 -- interpretProgram :: Program -> ByteCodeGenT [OpCode]

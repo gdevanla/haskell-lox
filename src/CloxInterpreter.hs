@@ -38,6 +38,7 @@ type CloxIO a = ExceptT T.Text (StateT VM IO) a
 pop :: CloxIO Value
 pop = do
   vm <- get
+  -- liftIO $ print vm
   let x : xs = stack vm -- handle exhaustive patterns while pop too many values
   put $ vm {stack = xs}
   return x
@@ -96,21 +97,26 @@ interpret = do
 interpretByteCode :: OpCode -> CloxIO InterpretResult
 interpretByteCode (OpConstant (DValue v)) = do
   --liftIO $ print $ show v
-  debugPrint v
+  --debugPrint v
   push (DValue v)
   -- liftIO $ putStrLn ("\n"::[Char])
   return InterpretNoResult
 interpretByteCode (OpConstant (SValue v)) = do
   --liftIO $ print $ show v
-  debugPrint v
+  --debugPrint v
   push (SValue v)
   -- liftIO $ putStrLn ("\n"::[Char])
+  return InterpretNoResult
+interpretByteCode (OpConstant NullValue) = do
+  --liftIO $ print $ show v
+  --debugPrint v
+  push NullValue
   return InterpretNoResult
 interpretByteCode OpReturn = return InterpretOK
 interpretByteCode OpNegate = do
   (DValue v) <- pop
   let result = DValue (-v)
-  liftIO $ print $ show result
+  --liftIO $ print $ show result
   push result
   return InterpretNoResult
 interpretByteCode OpAdd = interpretBinOp (+)
@@ -191,7 +197,7 @@ interpretByteCode (OpSetLocal i) = do
 interpretByteCode OpPop = do
   void pop
   return InterpretNoResult
-
+interpretByteCode x = error $ "not supported" ++ show x
 
 
 interpretBinOp :: (Double -> Double -> Double) -> CloxIO InterpretResult
@@ -201,7 +207,7 @@ interpretBinOp func = do
   let result = func v1 v2
   push (DValue result)
   -- liftIO $ print $ show result
-  debugPrint result
+  -- debugPrint result
   return InterpretNoResult
 
 debugPrint :: (Show a)=> a -> CloxIO ()

@@ -13,6 +13,7 @@ import Control.Monad.State.Strict
 import Data.Maybe
 import Data.List as L
 import Data.Text as T
+import Data.Map as M
 import Data.Sequence as Seq
 
 import CloxByteCode
@@ -31,12 +32,18 @@ test_compiler input expected = testCase input $ do
   assertEqual "" expected actual_stack
 
 test_locals = testCase "test_locals" $ do
-  let code = "var x1=200; {var x=10; {print x1+x; x=15; print x1+x;} print x;}"
+  let code = "var result1; var result2; var result3; var x1=200; {var x=10; {result1=x1+x; x=15; result2=x1+x;} result3=x;}"
+  --let code = "var result1; result1=100; print result1;"
   opcodes' <- compileToByteCode . T.pack $ code
-  print opcodes'
+  --print opcodes'
   let opcodes = fromRight [] opcodes'
   vm <- runInterpreter [Chunk (Seq.fromList opcodes)]
-  print vm
+  let expected = M.fromList [
+        ("result1", DValue 210.0),
+        ("result2", DValue 215.0),
+        ("result3", DValue 15.0),
+        ("x1", DValue 200.0)]
+  assertEqual "" expected (globals vm)
 
 
 testData = let
@@ -94,6 +101,5 @@ test_expressions = testGroup "test_expressions" $
   L.map (uncurry test_compiler) testData
 
 main = do
-  defaultMain $ testGroup "test_vm"
-    $ [test_expressions] ++ [test_locals]
+  defaultMain $ testGroup "test_vm" $ test_expressions:[test_locals]
   --defaultMain tests
