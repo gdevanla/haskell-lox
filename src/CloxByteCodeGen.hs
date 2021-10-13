@@ -22,10 +22,36 @@ import System.Console.Haskeline
 import CloxByteCode
 
 
-data Env = Env {something::Int}
+data Env = Env {
+  local_count:: !Int,
+  scope_depth:: !Int,
+  locals:: ![Local]
+  }
+
+data Local = Local T.Text Int
 
 initEnv :: Env
-initEnv = Env {something=1}
+initEnv = Env {local_count=0, scope_depth=0, locals=[]}
+
+updateScopeDepth :: (Int->Int->Int) -> ByteCodeGenT ()
+updateScopeDepth op = do
+  env <- get
+  put $ env {scope_depth = op (scope_depth env) 1}
+
+incrScopeDepth :: ByteCodeGenT ()
+incrScopeDepth = updateScopeDepth (+)
+
+decrScopeDepth :: ByteCodeGenT ()
+decrScopeDepth = updateScopeDepth (-)
+
+getLocalIndex :: T.Text -> ByteCodeGenT (Maybe Int)
+getLocalIndex key = do
+  env <- get
+  let l' = locals env
+  return $ go key l' 0
+  where
+    go key' (Local n _:xs) offset = if n == key' then Just offset else go key' xs (offset + 1)
+    go key' [] _ = Nothing
 
 type ByteCodeGenT a = ExceptT T.Text (StateT Env IO) a
 
@@ -35,7 +61,13 @@ interpret (Literal t) = lift $ return $ [OpConstant (SValue t)]
 interpret (LoxBool t) = lift $ if t then return [OpTrue] else return [OpFalse]
 interpret LoxNil = lift $ return [OpNull]
 interpret (Paren expr) = interpret expr
-interpret (Identifier i) = return [OpGetGlobal i]
+interpret (Identifier i) = do
+  env <- get
+  let scope = scope_depth env
+  local_index <- getLocalIndex i
+  case local_index of
+    Just v -> return [OpGetLocal v]
+    Nothing -> return [OpGetGlobal i]
 interpret (Unary op expr) = do
   value <- interpret expr
   case op of
@@ -74,16 +106,11 @@ interpret (Binary expr1 op expr2) = do
       -- (x, y) -> ExceptT . return . Left $ T.pack $ "Unsupported operation (+) on "  ++ show x ++ " and " ++ show y
 interpret (Assignment lhs rhs) = do
   rhs_code <- interpret rhs
-  return $ rhs_code ++ [OpSetGlobal lhs]
-  -- s <- get
-  -- lox_value <- interpret rhs
-  -- s' <- get  -- need to get an s after all rhs are processed
-  -- case updateEnv lhs lox_value s' of
-  --   Just s'' -> do
-  --     put $ s''
-  --     lift . return  $ lox_value
-  --   Nothing -> ExceptT . return . Left $ "Assignment to variable before declaration :" <> lhs
-
+  env <- get
+  local_index <- getLocalIndex lhs
+  case local_index of
+    Just offset -> return $ rhs_code ++ [OpSetLocal offset]
+    Nothing -> return $ rhs_code ++ [OpSetGlobal lhs]
 -- interpret (Logical expr1 op expr2) = do
 --   result <- interpret expr1
 --   case (op, isTruthy result) of
@@ -99,7 +126,19 @@ interpretStmt (StmtPrint expr) = do
   result <- interpret expr
   return $ result ++ [OpPrint]
 
--- interpretStmt (StmtBlock program) = do
+interpretStmt (StmtBlock program) = do
+  incrScopeDepth
+  result <- interpretProgram program
+  decrScopeDepth
+  env <- get
+  let l = locals env
+  let l' = L.length $ L.filter (go env) l
+  let locals' = L.filter (not . go env) l
+  put $ env {locals=locals'}
+  return $ result ++ L.replicate l' OpPop
+  where
+    go env (Local t offset) = offset > scope_depth env
+
 --   s <- get
 --   let s' = initEnv (Just s)
 --   put s'
@@ -130,18 +169,15 @@ interpretStmt (StmtPrint expr) = do
 --         go
 --         else return LoxValueSentinel
 
-
-
 interpretDeclaration :: Declaration -> ByteCodeGenT [OpCode]
 interpretDeclaration (DeclVar (Decl var (Just expr))) = do
   result <- interpret expr
-  return $ result ++ [OpDefineGlobal var]
-
-  -- result <- interpret expr
-  -- s <- get
-  -- let s' = insertEnv var result s
-  -- put s'
-  -- return LoxValueSentinel
+  env <- get
+  if scope_depth env == 0 then return $ result ++ [OpDefineGlobal var]
+    else do
+    let scope = scope_depth env
+    put $ env {locals = Local var scope:locals env}
+    return result
 -- interpretDeclaration (DeclVar (Decl var Nothing)) = do
 --   s <- get
 --   put (insertEnv var LoxValueNil s)

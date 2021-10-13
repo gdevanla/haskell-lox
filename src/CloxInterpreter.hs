@@ -36,11 +36,31 @@ push value = do
 type CloxIO a = ExceptT T.Text (StateT VM IO) a
 
 pop :: CloxIO Value
-pop  = do
+pop = do
   vm <- get
-  let x:xs = stack vm  -- handle exhaustive patterns while pop too many values
-  put $ vm {stack=xs}
+  let x : xs = stack vm -- handle exhaustive patterns while pop too many values
+  put $ vm {stack = xs}
   return x
+
+peek :: CloxIO Value
+peek = do
+  vm <- get
+  let x:_ = stack vm -- handle exhaustive patterns while pop too many values
+  return x
+
+
+
+peekN :: Int -> CloxIO Value
+peekN offset = do
+  vm <- get
+  return $ (L.!!) (L.reverse $ stack vm) offset -- fix this, this is O(n)
+
+setLocal :: Int -> Value -> CloxIO ()
+setLocal offset value = do
+  vm <- get
+  let (xs, _:xs') = L.splitAt (offset-1) (L.reverse $ stack vm)
+  let !s'= xs ++ [value] ++ xs'
+  put $ vm {stack=L.reverse s'}
 
 updateGlobals :: T.Text -> Value -> CloxIO ()
 updateGlobals k v = do
@@ -160,6 +180,18 @@ interpretByteCode (OpSetGlobal var) = do
     updateGlobals var val
     return InterpretNoResult
     else return $ InterpretRuntimeError $ "Key assigned before declaration: " <> var
+interpretByteCode (OpGetLocal i) = do
+  val <- peekN i
+  push val
+  return InterpretNoResult
+interpretByteCode (OpSetLocal i) = do
+  val <- peek
+  setLocal i val
+  return InterpretNoResult
+interpretByteCode OpPop = do
+  void pop
+  return InterpretNoResult
+
 
 
 interpretBinOp :: (Double -> Double -> Double) -> CloxIO InterpretResult
