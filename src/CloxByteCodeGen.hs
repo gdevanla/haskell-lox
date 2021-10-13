@@ -139,21 +139,6 @@ interpretStmt (StmtBlock program) = do
   where
     go env (Local t offset) = offset > scope_depth env
 
---   s <- get
---   let s' = initEnv (Just s)
---   put s'
---   result <- interpretProgram program
---   s'' <- get
---   case parent s'' of
---     Just p ->  do
---       put p
---       return result
---     Nothing -> do
---       let msg = "Unexpected state of environment where parent is missing from passed in child"
---       liftIO $ print msg
---       ExceptT . return . Left $ msg
-
-
 -- interpretStmt (StmtIf (IfElse cond ifexpr elseexpr)) = do
 --   cond_result <- interpret cond
 --   if isTruthy cond_result
