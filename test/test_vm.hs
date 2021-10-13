@@ -30,6 +30,15 @@ test_compiler input expected = testCase input $ do
   let actual_stack = stack vm
   assertEqual "" expected actual_stack
 
+test_locals = testCase "test_locals" $ do
+  let code = "var x1=200; {var x=10; {print x1+x; x=15; print x1+x;} print x;}"
+  opcodes' <- compileToByteCode . T.pack $ code
+  print opcodes'
+  let opcodes = fromRight [] opcodes'
+  vm <- runInterpreter [Chunk (Seq.fromList opcodes)]
+  print vm
+
+
 testData = let
   expected = [
     [DValue 10.0],
@@ -86,5 +95,5 @@ test_expressions = testGroup "test_expressions" $
 
 main = do
   defaultMain $ testGroup "test_vm"
-    [test_expressions]
+    $ [test_expressions] ++ [test_locals]
   --defaultMain tests

@@ -24,7 +24,6 @@ test_compiler input expected = testCase input $ do
   -- putStrLn . show $ opcodes
   assertEqual "" opcodes expected
 
-
 testData = let
   expected = [
     [OpConstant (DValue 1.0), OpConstant (DValue 2.0), OpAdd, OpConstant (DValue 3.0), OpAdd, OpConstant (DValue 4.0), OpAdd],
