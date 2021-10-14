@@ -36,6 +36,8 @@ data OpCode
   | OpSetGlobal !T.Text
   | OpSetLocal !Int
   | OpGetLocal !Int
+  | OpJumpIfFalse !Int
+  | OpJump !Int
   deriving (Show, Eq)
 
 newtype Chunk = Chunk {unChunk :: Seq OpCode}

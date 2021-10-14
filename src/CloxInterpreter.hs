@@ -21,7 +21,7 @@ import CloxCompiler
 
 data VM = VM {
              chunk :: !Chunk,
-             index :: !Int,  --probably not needed but closer to the book
+             stack_index:: !Int,  -- we are going to use this to decide whether to skip instructions
              stack :: [Value],
              debugMode :: Bool,
              globals:: !(M.Map T.Text Value)
@@ -84,15 +84,27 @@ data InterpretResult =
 
 
 initVM :: Chunk -> VM
-initVM chunk = VM {stack=[], chunk=chunk, index=0, debugMode=True, globals=M.empty}
+initVM chunk = VM {stack=[], chunk=chunk, stack_index=0, debugMode=True, globals=M.empty}
 
 freeVM :: VM
 freeVM = undefined
 
+interpretByteCode' :: OpCode -> CloxIO InterpretResult
+interpretByteCode' opcode = do
+  vm <- get
+  let current = stack_index vm
+  if current == 0 then interpretByteCode opcode
+    else do
+    put $ vm {stack_index=current-1}
+    --vm <- get
+    --liftIO $ print (stack_index vm)
+    --liftIO $ print opcode
+    return InterpretNoResult
+
 interpret :: CloxIO ()
 interpret = do
   s <- get
-  mapM_ interpretByteCode (unChunk . chunk $ s)
+  mapM_ interpretByteCode' (unChunk . chunk $ s)
 
 interpretByteCode :: OpCode -> CloxIO InterpretResult
 interpretByteCode (OpConstant (DValue v)) = do
@@ -197,7 +209,29 @@ interpretByteCode (OpSetLocal i) = do
 interpretByteCode OpPop = do
   void pop
   return InterpretNoResult
+interpretByteCode (OpJumpIfFalse offset) = do
+  val <- pop
+  vm <- get
+  let is_truthy = isTruthy val
+  unless is_truthy $ put $ vm {stack_index = offset}
+  -- liftIO $ print val
+  --vm <- get
+  --liftIO $ print vm
+  --liftIO $ print offset
+  return InterpretNoResult
+interpretByteCode (OpJump offset) = do
+  vm <- get
+  put $ vm {stack_index = offset}
+  return InterpretNoResult
+
 interpretByteCode x = error $ "not supported" ++ show x
+
+isTruthy :: Value -> Bool
+isTruthy (DValue _) = True
+isTruthy (BValue True) = True
+isTruthy (BValue False) = False
+isTruthy (SValue _) = True
+isTruthy NullValue = False
 
 
 interpretBinOp :: (Double -> Double -> Double) -> CloxIO InterpretResult

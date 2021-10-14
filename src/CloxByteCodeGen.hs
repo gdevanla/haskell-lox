@@ -139,11 +139,13 @@ interpretStmt (StmtBlock program) = do
   where
     go env (Local t offset) = offset > scope_depth env
 
--- interpretStmt (StmtIf (IfElse cond ifexpr elseexpr)) = do
---   cond_result <- interpret cond
---   if isTruthy cond_result
---     then interpretStmt ifexpr
---     else maybe (return LoxValueNil) interpretStmt elseexpr
+interpretStmt (StmtIf (IfElse cond ifexpr elseexpr)) = do
+  cond_result <- interpret cond
+  if_opcodes <- interpretStmt ifexpr
+  let if_jump = OpJumpIfFalse $ 1 + L.length if_opcodes  -- one extra for jump
+  else_opcodes <- maybe (return []) interpretStmt elseexpr
+  let else_jump = [OpJump $ L.length else_opcodes | not $ L.null else_opcodes]
+  return $ cond_result ++ [if_jump] ++ if_opcodes ++ else_jump ++ else_opcodes
 
 -- interpretStmt (StmtWhile (While cond stmt)) = go
 --   where

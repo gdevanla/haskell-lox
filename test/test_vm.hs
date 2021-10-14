@@ -37,11 +37,57 @@ test_locals = testCase "test_locals" $ do
   --print opcodes'
   let opcodes = fromRight [] opcodes'
   vm <- runInterpreter [Chunk (Seq.fromList opcodes)]
-  let expected = M.fromList [
-        ("result1", DValue 210.0),
-        ("result2", DValue 215.0),
-        ("result3", DValue 15.0),
-        ("x1", DValue 200.0)]
+  let expected =
+        M.fromList
+          [ ("result1", DValue 210.0),
+            ("result2", DValue 215.0),
+            ("result3", DValue 15.0),
+            ("x1", DValue 200.0)
+          ]
+  assertEqual "" expected (globals vm)
+
+test_conditional_if = testCase "test_conditional_if" $ do
+  let code = "var result;var x = 10; if (x==10) {result=true;} else {result=false;}"
+  --let code = "var result1; result1=100; print result1;"
+  opcodes' <- compileToByteCode . T.pack $ code
+  --print opcodes'
+  let opcodes = fromRight [] opcodes'
+  vm <- runInterpreter [Chunk (Seq.fromList opcodes)]
+  let expected =
+        M.fromList
+          [ ("result", BValue True),
+            ("x", DValue 10.0)
+          ]
+  assertEqual "" expected (globals vm)
+
+test_conditional_else = testCase "test_conditional_else" $ do
+  let code = "var result;var x = 10; if (x==11) {result=true;} else {result=false;}"
+  --let code = "var result1; result1=100; print result1;"
+  opcodes' <- compileToByteCode . T.pack $ code
+  --print opcodes'
+  let opcodes = fromRight [] opcodes'
+  vm <- runInterpreter [Chunk (Seq.fromList opcodes)]
+  let expected =
+        M.fromList
+          [ ("result", BValue False),
+            ("x", DValue 10.0)
+          ]
+  assertEqual "" expected (globals vm)
+
+
+test_conditional_just_if = testCase "test_conditional_just_if" $ do
+  let code = "var result;var x = 10; if (x==11) {result=true;} var result1=100;"
+  --let code = "var result1; result1=100; print result1;"
+  opcodes' <- compileToByteCode . T.pack $ code
+  --print opcodes'
+  let opcodes = fromRight [] opcodes'
+  vm <- runInterpreter [Chunk (Seq.fromList opcodes)]
+  let expected =
+        M.fromList
+          [ ("result", NullValue),
+            ("x", DValue 10.0),
+            ("result1", DValue 100.0)
+          ]
   assertEqual "" expected (globals vm)
 
 
@@ -98,5 +144,5 @@ test_expressions = testGroup "test_expressions" $
   L.map (uncurry test_compiler) testData
 
 main = do
-  defaultMain $ testGroup "test_vm" $ test_expressions:[test_locals]
+  defaultMain $ testGroup "test_vm" $ test_expressions:[test_locals, test_conditional_if, test_conditional_just_if, test_conditional_else]
   --defaultMain tests
