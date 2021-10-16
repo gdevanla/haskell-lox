@@ -142,8 +142,8 @@ interpretStmt (StmtBlock program) = do
 interpretStmt (StmtIf (IfElse cond ifexpr elseexpr)) = do
   cond_result <- interpret cond
   if_opcodes <- interpretStmt ifexpr
-  let if_jump = OpJumpIfFalse $ 1 + L.length if_opcodes  -- one extra for jump
   else_opcodes <- maybe (return []) interpretStmt elseexpr
+  let if_jump = OpJumpIfFalse $ L.length if_opcodes + (if L.null else_opcodes then 0 else 1)
   let else_jump = [OpJump $ L.length else_opcodes | not $ L.null else_opcodes]
   return $ cond_result ++ [if_jump] ++ if_opcodes ++ else_jump ++ else_opcodes
 

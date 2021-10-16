@@ -64,7 +64,7 @@ test_conditional_else = testCase "test_conditional_else" $ do
   let code = "var result;var x = 10; if (x==11) {result=true;} else {result=false;}"
   --let code = "var result1; result1=100; print result1;"
   opcodes' <- compileToByteCode . T.pack $ code
-  --print opcodes'
+  print opcodes'
   let opcodes = fromRight [] opcodes'
   vm <- runInterpreter [Chunk (Seq.fromList opcodes)]
   let expected =
@@ -76,10 +76,10 @@ test_conditional_else = testCase "test_conditional_else" $ do
 
 
 test_conditional_just_if = testCase "test_conditional_just_if" $ do
-  let code = "var result;var x = 10; if (x==11) {result=true;} var result1=100;"
-  --let code = "var result1; result1=100; print result1;"
+  let code = "var result;var x = 10; if (x==11) {result=true;var y = 10;} var result1=100;"
+  -- let code = "var result1; result1=100; print result1;"
   opcodes' <- compileToByteCode . T.pack $ code
-  --print opcodes'
+  print opcodes'
   let opcodes = fromRight [] opcodes'
   vm <- runInterpreter [Chunk (Seq.fromList opcodes)]
   let expected =

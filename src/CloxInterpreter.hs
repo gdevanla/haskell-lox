@@ -39,6 +39,7 @@ pop :: CloxIO Value
 pop = do
   vm <- get
   -- liftIO $ print vm
+  -- liftIO $ print vm
   let x : xs = stack vm -- handle exhaustive patterns while pop too many values
   put $ vm {stack = xs}
   return x
@@ -111,6 +112,9 @@ interpretByteCode (OpConstant (DValue v)) = do
   --liftIO $ print $ show v
   --debugPrint v
   push (DValue v)
+  -- vm <- get
+  -- liftIO $ print $ "in const" ++ show v
+  -- liftIO $ print vm
   -- liftIO $ putStrLn ("\n"::[Char])
   return InterpretNoResult
 interpretByteCode (OpConstant (SValue v)) = do
@@ -181,6 +185,9 @@ interpretByteCode OpPrint = do
   liftIO $ print r  -- need to have specialized print for Value type
   return InterpretNoResult
 interpretByteCode (OpDefineGlobal var) = do
+  vm <- get
+  --liftIO $ print "in define"
+  --liftIO $ print vm
   val <- pop
   updateGlobals var val
   return InterpretNoResult
