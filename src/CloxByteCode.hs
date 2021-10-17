@@ -16,8 +16,8 @@ data Value = DValue {-# UNPACK #-} !Double
 
 
 data FuncObj = FuncObj {
-                       arity:: !Int,
-                       chunk:: !Chunk,
+                       funcobj_arity:: !Int,
+                       funcobj_chunk:: !Chunk,
                        funcobj_name:: !T.Text
                        }
                deriving (Show, Eq)
