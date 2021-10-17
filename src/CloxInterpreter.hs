@@ -21,10 +21,11 @@ import CloxCompiler
 
 data VM = VM {
              chunk :: !Chunk,
-             stack_index:: !Int,  -- we are going to use this to decide whether to skip instructions
+             -- stack_index:: !Int,  -- we are going to use this to decide whether to skip instructions
              stack :: [Value],
              debugMode :: Bool,
-             globals:: !(M.Map T.Text Value)
+             globals:: !(M.Map T.Text Value),
+             ip:: !Int
              }
           deriving (Show, Eq)
 
@@ -85,29 +86,38 @@ data InterpretResult =
 
 
 initVM :: Chunk -> VM
-initVM chunk = VM {stack=[], chunk=chunk, stack_index=0, debugMode=True, globals=M.empty}
+initVM chunk = VM {stack=[], chunk=chunk, debugMode=True, globals=M.empty, ip=0}
 
 freeVM :: VM
 freeVM = undefined
 
-interpretByteCode' :: OpCode -> CloxIO InterpretResult
-interpretByteCode' opcode = do
-  vm <- get
-  let current = stack_index vm
-  liftIO $ print vm
-  liftIO $ print opcode
-  if current == 0 then interpretByteCode opcode
-    else do
-    put $ vm {stack_index=current-1}
-    --vm <- get
-    --liftIO $ print (stack_index vm)
-    --liftIO $ print opcode
-    return InterpretNoResult
+-- interpretByteCode' :: OpCode -> CloxIO InterpretResult
+-- interpretByteCode' opcode = do
+--   vm <- get
+--   let current = stack_index vm
+--   liftIO $ print vm
+--   liftIO $ print opcode
+--   if current == 0 then interpretByteCode opcode
+--     else do
+--     put $ vm {stack_index=current-1}
+--     --vm <- get
+--     --liftIO $ print (stack_index vm)
+--     --liftIO $ print opcode
+--     return InterpretNoResult
 
 interpret :: CloxIO ()
-interpret = do
-  s <- get
-  mapM_ interpretByteCode' (unChunk . chunk $ s)
+interpret = go
+  where
+    go = do
+      vm <- get
+      let !opcode = Seq.lookup (ip vm) (unChunk . chunk $ vm)
+      case opcode of
+        Just oc -> do
+          put $ vm {ip=ip vm + 1}
+          void $ interpretByteCode oc
+          go
+        Nothing -> return ()
+
 
 interpretByteCode :: OpCode -> CloxIO InterpretResult
 interpretByteCode (OpConstant (DValue v)) = do
@@ -192,6 +202,9 @@ interpretByteCode (OpDefineGlobal var) = do
   liftIO $ print vm
   val <- pop
   updateGlobals var val
+  vm <- get
+  liftIO $ print $ "in define" ++ show var
+  liftIO $ print vm
   return InterpretNoResult
 interpretByteCode (OpGetGlobal var) = do
   val <- getGlobal var
@@ -222,16 +235,23 @@ interpretByteCode (OpJumpIfFalse offset) = do
   val <- peekN 0
   vm <- get
   let is_truthy = isTruthy val
-  unless is_truthy $ put $ vm {stack_index = offset}
-  -- liftIO $ print val
-  --vm <- get
-  --liftIO $ print vm
-  --liftIO $ print offset
+  unless is_truthy $ put $ vm {ip = ip vm + offset}
+  liftIO $ print $ "in false" ++ show val
+  vm <- get
+  liftIO $ print vm
+  liftIO $ print offset
   return InterpretNoResult
 interpretByteCode (OpJump offset) = do
   vm <- get
+  -- liftIO $ print vm
+  put $ vm {ip = ip vm + offset}
+  -- vm <- get
+  --liftIO $ print vm
+  return InterpretNoResult
+interpretByteCode (OpLoopStart offset) = do
+  vm <- get
   liftIO $ print vm
-  put $ vm {stack_index = offset}
+  put $ vm {ip = ip vm - offset}
   vm <- get
   liftIO $ print vm
   return InterpretNoResult
@@ -277,6 +297,6 @@ debugPrint r = do
 
 runInterpreter :: [Chunk] -> IO VM
 runInterpreter chunk = do
-  ((a, s): _) <- mapM ((runStateT . runExceptT $ interpret) . initVM) chunk
+  ((a, s) : _) <- mapM ((runStateT . runExceptT $ interpret) . initVM) chunk
   -- print s
   return s

@@ -38,6 +38,7 @@ data OpCode
   | OpGetLocal !Int
   | OpJumpIfFalse !Int
   | OpJump !Int
+  | OpLoopStart !Int
   deriving (Show, Eq)
 
 newtype Chunk = Chunk {unChunk :: Seq OpCode}

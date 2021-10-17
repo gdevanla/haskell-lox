@@ -161,6 +161,13 @@ interpretStmt (StmtIf (IfElse cond ifexpr elseexpr)) = do
   let else_pop = [OpPop | not $ L.null else_opcodes]
   return $ cond_result ++ [if_jump, OpPop] ++ if_opcodes ++ else_jump ++ else_pop ++ else_opcodes
 
+interpretStmt (StmtWhile (While cond stmt)) = do
+  cond_result <- interpret cond
+  stmt_codes <- interpretStmt stmt
+  let if_jump = OpJumpIfFalse $ L.length stmt_codes + 3
+  let start_of_chunk = 2 + L.length stmt_codes + L.length cond_result + 1
+  return $ cond_result ++ if_jump:OpPop:stmt_codes ++ [OpLoopStart start_of_chunk, OpPop]
+
 -- interpretStmt (StmtWhile (While cond stmt)) = go
 --   where
 --     go = do
