@@ -80,8 +80,42 @@ test_statements = [
       ],
 
   test_statement "while (a==10) {print a;}" $
-    Right [DeclStatement (StmtWhile (While (Binary (Identifier "a") EqualEqual (Number 10.0)) (StmtBlock [DeclStatement (StmtPrint (Identifier "a"))])))]
+    Right [DeclStatement (StmtWhile (While (Binary (Identifier "a") EqualEqual (Number 10.0)) (StmtBlock [DeclStatement (StmtPrint (Identifier "a"))])))],
+
+  test_statement "func(x1, x2);" $
+    Right [DeclStatement (StmtExpr
+                          (Call (Identifier "func")
+                           [Identifier "x1", Identifier "x2"]
+                           (LoxSourcePos 1 12)))],
+
+  test_statement "func(x3)(x1, x2);" $
+    Right [DeclStatement (StmtExpr (Call
+                                    (Call (Identifier "func") [Identifier "x3"] (LoxSourcePos 1 8))
+                                    [Identifier "x1",Identifier "x2"]
+                                    (LoxSourcePos 1 16)))],
+
+  test_statement "func(x3)(func(x1), x2);" $
+     Right [DeclStatement (StmtExpr (Call (
+                                        Call (Identifier "func") [Identifier "x3"] (LoxSourcePos 1 8))
+                                      [Call (Identifier "func") [Identifier "x1"] (LoxSourcePos 1 17),
+                                       Identifier "x2"] (LoxSourcePos 1 22)))
+           ],
+
+    test_statement "fun add(x1, y1) {result=x1+y1;print x1;}" $
+    Right [DeclFun (Func "add" ["x1", "y1"] [DeclStatement (StmtExpr (Assignment "result" (Binary (Identifier "x1") Plus (Identifier "y1")))), DeclStatement (StmtPrint (Identifier "x1"))])],
+
+    test_statement "return (a+b);" $
+    Right [DeclStatement (StmtReturn (Just (Binary (Identifier "a") Plus (Identifier "b"))))],
+
+    test_statement "fun f(x) {return (a+b);}" $
+    Right [DeclFun (Func "f" ["x"] [DeclStatement (StmtReturn (Just (Binary (Identifier "a") Plus (Identifier "b"))))])],
+
+    test_statement "y = f(x); print y;" $
+    Right [DeclFun (Func "f" ["x"] [DeclStatement (StmtReturn (Just (Binary (Identifier "a") Plus (Identifier "b"))))])]
+
+
   ]
+
 
 test_parsers = test_exprs ++ test_statements
 

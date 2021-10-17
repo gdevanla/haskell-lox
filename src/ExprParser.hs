@@ -7,6 +7,7 @@ import Data.Text as T
 import Import hiding (many, try, (<|>))
 import Scanner
 import Text.Parsec
+import qualified Data.List as L
 
 -- https://craftinginterpreters.com/parsing-expressions.html
 -- expression     → assignment ;
@@ -35,6 +36,8 @@ import Text.Parsec
 
 type LoxParserResult = Either ParseError Expr
 
+data LoxSourcePos = LoxSourcePos !Int !Int deriving (Show, Eq)
+
 data BinOp = NotEqual | EqualEqual | Gt | Gte | Lt | Lte | Plus | Minus | Star | Slash
   deriving (Show, Eq)
 
@@ -44,30 +47,33 @@ data LogicOp = And | Or deriving (Show, Eq)
 
 type Program = [Declaration]
 
-data Declaration = DeclVar Decl | DeclStatement Statement  deriving (Show, Eq)
+data Declaration = DeclFun !Func | DeclVar !Decl | DeclStatement !Statement  deriving (Show, Eq)
 
-data Decl = Decl T.Text (Maybe Expr)  deriving (Show, Eq)
+data Func = Func !T.Text ![T.Text] ![Declaration]  deriving (Show, Eq)
 
-data Statement = StmtExpr Expr | StmtPrint Expr | StmtIf IfElse | StmtBlock [Declaration]
-  | StmtWhile While
+data Decl = Decl !T.Text !(Maybe Expr)  deriving (Show, Eq)
+
+data Statement = StmtExpr !Expr | StmtPrint !Expr | StmtIf !IfElse | StmtBlock [Declaration]
+  | StmtWhile !While | StmtReturn !(Maybe Expr)
   deriving (Show, Eq)
 
 
-data IfElse = IfElse Expr Statement (Maybe Statement) deriving (Show, Eq)
+data IfElse = IfElse !Expr !Statement (Maybe Statement) deriving (Show, Eq)
 
-data While = While Expr Statement deriving (Show, Eq)
+data While = While !Expr !Statement deriving (Show, Eq)
 
 data Expr
-  = Number Double
-  | Literal T.Text
-  | Identifier T.Text
-  | LoxBool Bool
+  = Number !Double
+  | Literal !T.Text
+  | Identifier !T.Text
+  | LoxBool !Bool
   | LoxNil
-  | Paren Expr
-  | Unary UnaryOp Expr
-  | Binary Expr BinOp Expr
-  | Assignment T.Text Expr
-  | Logical Expr LogicOp Expr
+  | Paren !Expr
+  | Unary !UnaryOp !Expr
+  | Binary !Expr !BinOp !Expr
+  | Assignment !T.Text !Expr
+  | Logical !Expr !LogicOp !Expr
+  | Call !Expr [Expr] !LoxSourcePos
   deriving (Show, Eq)
 
 -- satisfy = tokenPrim (t -> String) (SourcePos -> t -> s -> SourcePos) (t -> Maybe a)
@@ -170,7 +176,31 @@ unary' = Unary <$> satisfyT f <*> unary
 
 
 unary :: Parser Expr
-unary = unary' <|> loxPrimary
+unary = try unary' <|> call
+
+call :: Parser Expr
+call = do
+  primary <- loxPrimary
+  func_args <- many funcCall
+  case func_args of
+   _:_ -> return $ L.foldl' step primary func_args
+   [] -> return primary
+  where
+    step acc (exprs, close_tok) = Call acc exprs (getLoxSourcePos close_tok)
+    getLoxSourcePos close_tok = let sc = tok_position close_tok
+      in
+      LoxSourcePos (sourceLine sc) (sourceColumn sc)
+
+funcCall :: Parser ([Expr], LoxTokInfo)
+funcCall = do
+  void $ satisfyT openParen
+  arguments <- loxArguments
+  close_tok <- satisfyT closeParen
+  return (arguments, close_tok)
+
+loxArguments :: Parser [Expr]
+loxArguments = sepBy loxExpr comma -- skipping validation of max argument count
+
 
 factor :: Parser Expr
 factor = leftChain unary (satisfyT f)
@@ -246,6 +276,23 @@ semi = satisfyT f
       SEMICOLON -> Just ()
       _ -> Nothing
 
+comma :: Parser ()
+comma = satisfyT f
+  where
+    f x = case tokinfo_type x of
+      COMMA -> Just ()
+      _ -> Nothing
+
+openParen ::LoxTokInfo ->  Maybe LoxTokInfo
+openParen x = case tokinfo_type x of
+  LEFT_PAREN -> Just x
+  _ -> Nothing
+
+closeParen :: LoxTokInfo -> Maybe LoxTokInfo
+closeParen x = case tokinfo_type x of
+  RIGHT_PAREN -> Just x
+  _ -> Nothing
+
 loxPrintStmt :: Parser Expr
 loxPrintStmt = do
   void $ satisfyT f
@@ -289,19 +336,16 @@ whileStmt = do
 
 
 loxStatement :: Parser Statement
-loxStatement = StmtExpr <$> (try loxExpr <* semi) <|>
-  StmtPrint <$> (try loxPrintStmt <* semi) <|>
-  try ifStmt <|>
-  try whileStmt <|>
-  loxBlock
+loxStatement = StmtExpr <$> (try loxExpr <* semi) <|> StmtPrint <$> (try loxPrintStmt <* semi) <|> try ifStmt <|> try whileStmt <|> try loxBlock <|> loxReturn
 
 
-loxBlock :: Parser Statement
-loxBlock = do
+
+loxBlock' :: Parser [Declaration]
+loxBlock' = do
   void $ satisfyT left_brace
   prog <- loxProgram
   void $ satisfyT right_brace
-  return $ StmtBlock prog
+  return $ prog
   where
     left_brace x = case tokinfo_type x of
       LEFT_BRACE -> Just ()
@@ -311,6 +355,8 @@ loxBlock = do
       RIGHT_BRACE -> Just ()
       _ -> Nothing
 
+loxBlock :: Parser Statement
+loxBlock = StmtBlock <$> loxBlock'
 
 loxDeclStatment :: Parser Declaration
 loxDeclStatment = DeclStatement <$> loxStatement
@@ -327,7 +373,7 @@ loxAssignment = do
 loxDeclaration :: Parser Declaration
 loxDeclaration = do
   void $ satisfyT f
-  var_name <- satisfyT fi
+  var_name <- identifier
   expr <- optionMaybe loxAssignment
   void semi
   return $ DeclVar $ Decl var_name expr
@@ -336,13 +382,44 @@ loxDeclaration = do
       VAR -> Just ()
       _ -> Nothing
 
+loxFuncDecl :: Parser Declaration
+loxFuncDecl = do
+  void $ satisfyT func_keyword
+  func_name <- identifier
+  void $ satisfyT openParen
+  params <- parameters
+  void $ satisfyT closeParen
+  func_body <- loxBlock'
+  return $ DeclFun $ Func func_name params func_body
+  where
+    func_keyword x = case tokinfo_type x of
+      FUN -> Just ()
+      _ -> Nothing
+
+    parameters :: Parser [T.Text]
+    parameters = sepBy identifier comma -- skipping validation of max argument count
+
+loxReturn :: Parser Statement
+loxReturn = do
+  void $ satisfyT return_keyword
+  expr <- optionMaybe loxExpr
+  void semi
+  return $ StmtReturn expr
+  where
+    return_keyword x = case tokinfo_type x of
+      RETURN -> Just ()
+      _ -> Nothing
+
+identifier :: Parser T.Text
+identifier = satisfyT fi
+  where
     fi x = case tokinfo_type x of
       IDENTIFIER ix -> Just (T.pack ix)
       _ -> Nothing
 
 
 loxDeclarations :: Parser Declaration
-loxDeclarations = try loxDeclaration <|> DeclStatement <$> loxStatement
+loxDeclarations = try loxFuncDecl <|> try loxDeclaration  <|> DeclStatement <$> loxStatement
 
 loxProgram :: Parser Program
 loxProgram = many1 loxDeclarations -- endBy1 loxDeclarations semi

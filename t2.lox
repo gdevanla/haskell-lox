@@ -1,0 +1,14 @@
+fun func()
+    {
+        var x = 10;
+        fun inner()
+            {
+                print x;
+            }
+        inner();
+        x = 20;
+        inner();
+        print x;
+    }
+
+func();
