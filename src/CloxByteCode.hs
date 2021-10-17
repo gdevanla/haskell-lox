@@ -11,7 +11,19 @@ data Value = DValue {-# UNPACK #-} !Double
              | BValue {-# UNPACK #-} !Bool
              | SValue !T.Text
              | NullValue
+             | Function !FuncObj
            deriving (Show, Eq)
+
+
+data FuncObj = FuncObj {
+                       arity:: !Int,
+                       chunk:: !Chunk,
+                       funcobj_name:: !T.Text
+                       }
+               deriving (Show, Eq)
+
+-- instance Show FuncObj where
+--   show funcobj = show $ "<funcobj: " <> funcobj_name funcobj <> ">"
 
 data OpCode
   = OpReturn

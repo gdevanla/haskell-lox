@@ -168,15 +168,6 @@ interpretStmt (StmtWhile (While cond stmt)) = do
   let start_of_chunk = 2 + L.length stmt_codes + L.length cond_result + 1
   return $ cond_result ++ if_jump:OpPop:stmt_codes ++ [OpLoopStart start_of_chunk, OpPop]
 
--- interpretStmt (StmtWhile (While cond stmt)) = go
---   where
---     go = do
---       cond_result <- interpret cond
---       if isTruthy cond_result then  do
---         void $ interpretStmt stmt
---         go
---         else return LoxValueSentinel
-
 interpretDeclaration :: Declaration -> ByteCodeGenT [OpCode]
 interpretDeclaration (DeclVar (Decl var (Just expr))) = do
   result <- interpret expr
