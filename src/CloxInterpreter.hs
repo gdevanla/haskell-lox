@@ -94,6 +94,8 @@ interpretByteCode' :: OpCode -> CloxIO InterpretResult
 interpretByteCode' opcode = do
   vm <- get
   let current = stack_index vm
+  liftIO $ print vm
+  liftIO $ print opcode
   if current == 0 then interpretByteCode opcode
     else do
     put $ vm {stack_index=current-1}
@@ -186,8 +188,8 @@ interpretByteCode OpPrint = do
   return InterpretNoResult
 interpretByteCode (OpDefineGlobal var) = do
   vm <- get
-  --liftIO $ print "in define"
-  --liftIO $ print vm
+  liftIO $ print $ "in define" ++ show var
+  liftIO $ print vm
   val <- pop
   updateGlobals var val
   return InterpretNoResult
@@ -217,7 +219,7 @@ interpretByteCode OpPop = do
   void pop
   return InterpretNoResult
 interpretByteCode (OpJumpIfFalse offset) = do
-  val <- pop
+  val <- peekN 0
   vm <- get
   let is_truthy = isTruthy val
   unless is_truthy $ put $ vm {stack_index = offset}
@@ -228,7 +230,10 @@ interpretByteCode (OpJumpIfFalse offset) = do
   return InterpretNoResult
 interpretByteCode (OpJump offset) = do
   vm <- get
+  liftIO $ print vm
   put $ vm {stack_index = offset}
+  vm <- get
+  liftIO $ print vm
   return InterpretNoResult
 
 interpretByteCode x = error $ "not supported" ++ show x

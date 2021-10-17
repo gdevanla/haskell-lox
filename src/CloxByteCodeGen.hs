@@ -111,7 +111,20 @@ interpret (Assignment lhs rhs) = do
   case local_index of
     Just offset -> return $ rhs_code ++ [OpSetLocal offset]
     Nothing -> return $ rhs_code ++ [OpSetGlobal lhs]
--- interpret (Logical expr1 op expr2) = do
+interpret (Logical expr1 op expr2) = do
+  case op of
+    And -> do
+      expr1_opcode <- interpret expr1
+      expr2_opcode <- interpret expr2
+      let if_jump = OpJumpIfFalse $ L.length expr2_opcode
+      return $ expr1_opcode ++ if_jump:expr2_opcode
+    Or -> do
+      expr1_opcode <- interpret expr1
+      expr2_opcode <- interpret expr2
+      let if_jump = OpJumpIfFalse 1
+      let op_jump = OpJump $ 1 + L.length expr2_opcode
+      return $ expr1_opcode ++ [if_jump, op_jump, OpPop] ++ expr2_opcode
+
 --   result <- interpret expr1
 --   case (op, isTruthy result) of
 --     (Or, True) -> return result
@@ -143,9 +156,10 @@ interpretStmt (StmtIf (IfElse cond ifexpr elseexpr)) = do
   cond_result <- interpret cond
   if_opcodes <- interpretStmt ifexpr
   else_opcodes <- maybe (return []) interpretStmt elseexpr
-  let if_jump = OpJumpIfFalse $ L.length if_opcodes + (if L.null else_opcodes then 0 else 1)
-  let else_jump = [OpJump $ L.length else_opcodes | not $ L.null else_opcodes]
-  return $ cond_result ++ [if_jump] ++ if_opcodes ++ else_jump ++ else_opcodes
+  let if_jump = OpJumpIfFalse $ L.length if_opcodes + (if L.null else_opcodes then 1 else 2)
+  let else_jump = [OpJump $ L.length else_opcodes + 1| not $ L.null else_opcodes]
+  let else_pop = [OpPop | not $ L.null else_opcodes]
+  return $ cond_result ++ [if_jump, OpPop] ++ if_opcodes ++ else_jump ++ else_pop ++ else_opcodes
 
 -- interpretStmt (StmtWhile (While cond stmt)) = go
 --   where
