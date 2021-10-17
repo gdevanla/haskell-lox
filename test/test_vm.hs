@@ -141,7 +141,20 @@ test_while = testCase "test_while" $ do
   vm <- runInterpreter [Chunk (Seq.fromList opcodes)]
   let expected =
         M.fromList
-          [ ("result", DValue 12.0)]
+          [("result", DValue 12.0)]
+  assertEqual "" expected (globals vm)
+
+test_while_false = testCase "test_while_false" $ do
+  let code = "var result=10; while (result<5) { result = result + 1;} var result1=result;"
+  -- let code = "var result1; result1=100; print result1;"
+  opcodes' <- compileToByteCode . T.pack $ code
+  print opcodes'
+  let opcodes = fromRight [] opcodes'
+  vm <- runInterpreter [Chunk (Seq.fromList opcodes)]
+  let expected =
+        M.fromList
+          [("result", DValue 10.0),
+           ("result1", DValue 10.0)]
   assertEqual "" expected (globals vm)
 
 
@@ -197,6 +210,6 @@ test_expressions =
     L.map (uncurry test_compiler) testData
 
 main = do
-  defaultMain $ testGroup "test_vm" $ test_expressions : [test_locals, test_conditional_if, test_conditional_just_if, test_conditional_else, test_conditional_and, test_conditional_and_false, test_conditional_or, test_while]
+  defaultMain $ testGroup "test_vm" $ test_expressions : [test_locals, test_conditional_if, test_conditional_just_if, test_conditional_else, test_conditional_and, test_conditional_and_false, test_conditional_or, test_while, test_while_false]
 
 --defaultMain tests
