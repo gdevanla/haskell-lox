@@ -23,15 +23,18 @@ import CloxByteCode
 
 
 data Env = Env {
+  chunk_type:: !ChunkType,
   local_count:: !Int,
   scope_depth:: !Int,
   locals:: ![Local]
   }
 
+data ChunkType = ChunkScript | ChunkFunction
+
 data Local = Local T.Text Int
 
 initEnv :: Env
-initEnv = Env {local_count=0, scope_depth=0, locals=[]}
+initEnv = Env {local_count=0, scope_depth=0, locals=[Local "" 0], chunk_type=ChunkScript}
 
 updateScopeDepth :: (Int->Int->Int) -> ByteCodeGenT ()
 updateScopeDepth op = do
@@ -125,6 +128,29 @@ interpret (Logical expr1 op expr2) = do
       let op_jump = OpJump $ 1 + L.length expr2_opcode
       return $ expr1_opcode ++ [if_jump, op_jump, OpPop] ++ expr2_opcode
 
+--interpret (Call !expr !arguments _) = do
+  -- !callee <- interpret expr
+  -- !args <- mapM interpret arguments
+  -- !orig <- get
+  -- case callee of
+  --   LoxValueFunction !func_name !params !block !closure -> do
+  --     let !pa = L.zip params args
+  --     --liftIO $ putStrLn $ show s'
+  --     let !s = multiInsertEnv pa (initEnv (Just closure))
+  --     -- we need to insert this back here to resolve circular dependency
+  --     let !s' = insertEnv func_name (LoxValueFunction func_name params block closure) s
+  --     put $! s'
+  --     !value <- catchError (interpretProgram block) f
+  --     put orig
+  --     return $! value
+  --   _ -> ExceptT . return . Left $! SystemError $ "Function not callable: " <> T.pack (show callee)
+  -- where
+  --   f (SystemError e) = ExceptT . return . Left $ SystemError e
+  --   f (ControlFlow (LoxValueReturn e)) = return e
+  --   f (ControlFlow v) = ExceptT . return . Left $ SystemError $ "Unknown handler:" <> T.pack (show v)
+--{-# INLINE interpret #-}
+
+
 --   result <- interpret expr1
 --   case (op, isTruthy result) of
 --     (Or, True) -> return result
@@ -187,6 +213,25 @@ interpretDeclaration (DeclVar (Decl var Nothing)) = do
     return result
 
 interpretDeclaration (DeclStatement stmt) = interpretStmt stmt
+
+-- interpretDeclaration (DeclFun (Func !func_name !params !block)) = do
+--   result <- interpretProgram block
+--   let func_object = FuncObj {
+--         funcboj_arity=L.length params
+--         funcobj_chunk=result,
+--         funcobj_name=func_name
+--         }
+--   env <- get
+--   if scope_depth env == 0 then return $ [OpDefineGlobal var]
+--     else do
+--     let scope = scope_depth env
+--     put $ env {locals = Local var scope:locals env}
+--     return result
+
+  --let !func = LoxValueFunction func_name params block closure
+  --let !closure' = insertEnv func_name func closure -- capture the closure, add back func later on
+  --put closure'
+  --return LoxValueSentinel
 
 -- interpretProgram :: Program -> ByteCodeGenT [OpCode]
 

@@ -19,13 +19,26 @@ import Data.Map.Strict as M
 import CloxByteCode
 import CloxCompiler
 
+data CallFrame = CallFrame {
+  cf_ip :: !Int,
+  cf_funcobj:: FuncObj,
+  cf_stack_offset:: !Int
+  }
+  deriving (Show, Eq)
+
+newtype CallFrames = CallFrames {un_cf:: Seq CallFrame}
+  deriving (Show, Eq)
+
 data VM = VM {
-             chunk :: !Chunk,
+             -- chunk :: !Chunk,
+             -- ip:: !Int,
+             vm_cf:: CallFrames,
+
              -- stack_index:: !Int,  -- we are going to use this to decide whether to skip instructions
              stack :: [Value],
              debugMode :: Bool,
-             globals:: !(M.Map T.Text Value),
-             ip:: !Int
+             globals:: !(M.Map T.Text Value)
+
              }
           deriving (Show, Eq)
 
@@ -86,7 +99,30 @@ data InterpretResult =
 
 
 initVM :: Chunk -> VM
-initVM chunk = VM {stack=[], chunk=chunk, debugMode=True, globals=M.empty, ip=0}
+initVM chunk = let
+  funcobj = FuncObj 0 chunk ""
+  cf = CallFrame {cf_ip=0, cf_funcobj=funcobj, cf_stack_offset=0}
+  cfs = CallFrames (cf<|Seq.empty)
+  in
+  VM {stack=[],
+                   debugMode=True,
+                   globals=M.empty,
+                   vm_cf=cfs}
+
+moveIP :: Int -> CloxIO ()
+moveIP offset = do
+  vm <- get
+  let cf:<|xs = un_cf $ vm_cf vm
+  let cf' = cf {cf_ip=cf_ip cf + offset}
+  put $ vm {vm_cf=CallFrames $ cf'<|xs}
+
+incrIP = moveIP 1
+
+getNextOpCode = do
+  vm <- get
+  let cf:<|_ = un_cf $ vm_cf vm
+  let !opcode = Seq.lookup (cf_ip cf) (unChunk (funcobj_chunk (cf_funcobj cf)))
+  return opcode
 
 freeVM :: VM
 freeVM = undefined
@@ -109,11 +145,10 @@ interpret :: CloxIO ()
 interpret = go
   where
     go = do
-      vm <- get
-      let !opcode = Seq.lookup (ip vm) (unChunk . chunk $ vm)
+      opcode <- getNextOpCode
       case opcode of
         Just oc -> do
-          put $ vm {ip=ip vm + 1}
+          incrIP
           void $ interpretByteCode oc
           go
         Nothing -> return ()
@@ -235,25 +270,25 @@ interpretByteCode (OpJumpIfFalse offset) = do
   val <- peekN 0
   vm <- get
   let is_truthy = isTruthy val
-  unless is_truthy $ put $ vm {ip = ip vm + offset}
+  unless is_truthy $ moveIP offset
   liftIO $ print $ "in false" ++ show val
   vm <- get
   liftIO $ print vm
   liftIO $ print offset
   return InterpretNoResult
 interpretByteCode (OpJump offset) = do
-  vm <- get
+  -- vm <- get
   -- liftIO $ print vm
-  put $ vm {ip = ip vm + offset}
+  moveIP offset
   -- vm <- get
   --liftIO $ print vm
   return InterpretNoResult
 interpretByteCode (OpLoopStart offset) = do
-  vm <- get
-  liftIO $ print vm
-  put $ vm {ip = ip vm - offset}
-  vm <- get
-  liftIO $ print vm
+  --vm <- get
+  --liftIO $ print vm
+  moveIP (-offset)
+  --vm <- get
+  --liftIO $ print vm
   return InterpretNoResult
 
 interpretByteCode x = error $ "not supported" ++ show x
