@@ -35,7 +35,10 @@ data ChunkType = ChunkScript | ChunkFunction
 data Local = Local T.Text Int
 
 initEnv :: Env
-initEnv = Env {local_count=0, scope_depth=0, locals=[Local "" 0], chunk_type=ChunkScript}
+initEnv = Env {local_count = 0, scope_depth = 0, locals = [Local "" 0], chunk_type = ChunkScript}
+
+initEnvFunc :: Env
+initEnvFunc = Env {local_count = 0, scope_depth = 0, locals = [Local "" 0], chunk_type = ChunkFunction}
 
 updateScopeDepth :: (Int->Int->Int) -> ByteCodeGenT ()
 updateScopeDepth op = do
@@ -204,16 +207,36 @@ interpretDeclaration (DeclVar (Decl var Nothing)) = do
 
 interpretDeclaration (DeclStatement stmt) = interpretStmt stmt
 
+
 interpretDeclaration (DeclFun (Func !func_name !params !block)) = do
-  result <- interpretAsBlock block
-  let func_obj = FuncObj 0 (Chunk $ Seq.fromList result) func_name
-  env <- get
-  let func_opcode = OpConstant $ Function func_obj
-  if scope_depth env == 0 then return $ func_opcode:[OpDefineGlobal func_name]
-    else do
-    let scope = scope_depth env
-    put $ env {locals = Local func_name scope:locals env}
-    return [func_opcode]
+  void $ declareFunctionName func_name
+  x <- liftIO $ evalStateT (runExceptT (interpretAsBlock block)) initEnvFunc
+  case x of
+    Right block_codes -> buildFunction block_codes func_name
+    Left x -> error $ show x
+  where
+    buildFunction :: [OpCode] -> T.Text -> ByteCodeGenT [OpCode]
+    buildFunction opcodes func_name = do
+      let func_obj = FuncObj 0 (Chunk $ Seq.fromList opcodes) func_name
+      env <- get
+      let func_opcode = OpConstant $ Function func_obj
+      if scope_depth env == 0
+        then return $ func_opcode : [OpDefineGlobal func_name]
+        else do
+        let scope = scope_depth env
+        put $ env {locals = Local func_name scope : locals env}
+        return [func_opcode]
+
+    declareFunctionName :: T.Text  -> ByteCodeGenT [OpCode]
+    declareFunctionName func_name = do
+      env <- get
+      if scope_depth env == 0
+        then return [OpDefineGlobal func_name]
+        else do
+        let scope = scope_depth env
+        put $ env {locals = Local func_name scope : locals env}
+        return []
+
 
 --   result <- interpretProgram block
 --   let func_object = FuncObj {

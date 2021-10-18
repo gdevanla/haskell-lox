@@ -51,6 +51,7 @@ data OpCode
   | OpJumpIfFalse !Int
   | OpJump !Int
   | OpLoopStart !Int
+  | OpCall !Int -- arg count
   deriving (Show, Eq)
 
 newtype Chunk = Chunk {unChunk :: Seq OpCode}
