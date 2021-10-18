@@ -175,6 +175,12 @@ interpretByteCode (OpConstant NullValue) = do
   --debugPrint v
   push NullValue
   return InterpretNoResult
+interpretByteCode (OpConstant func) = do
+    --liftIO $ print $ show v
+    --debugPrint v
+    push func
+    -- liftIO $ putStrLn ("\n"::[Char])
+    return InterpretNoResult
 interpretByteCode OpReturn = return InterpretOK
 interpretByteCode OpNegate = do
   (DValue v) <- pop
@@ -291,7 +297,9 @@ interpretByteCode (OpLoopStart offset) = do
   --liftIO $ print vm
   return InterpretNoResult
 
-interpretByteCode x = error $ "not supported" ++ show x
+interpretByteCode x = do
+  vm <- get
+  error $ "not supported" ++ show x ++ show vm
 
 isTruthy :: Value -> Bool
 isTruthy (DValue _) = True

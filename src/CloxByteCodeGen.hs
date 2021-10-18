@@ -18,6 +18,7 @@ import Scanner (scanner)
 import qualified Text.Parsec as P
 import qualified Control.Monad
 import System.Console.Haskeline
+import Data.Sequence as Seq
 
 import CloxByteCode
 
@@ -214,7 +215,19 @@ interpretDeclaration (DeclVar (Decl var Nothing)) = do
 
 interpretDeclaration (DeclStatement stmt) = interpretStmt stmt
 
--- interpretDeclaration (DeclFun (Func !func_name !params !block)) = do
+interpretDeclaration (DeclFun (Func !func_name !params !block)) = do
+  incrScopeDepth
+  result <- interpretProgram block
+  let func_obj = FuncObj 0 (Chunk $ Seq.fromList result) func_name
+  decrScopeDepth
+  env <- get
+  let func_opcode = OpConstant $ Function func_obj
+  if scope_depth env == 0 then return $ func_opcode:[OpDefineGlobal func_name]
+    else do
+    let scope = scope_depth env
+    put $ env {locals = Local func_name scope:locals env}
+    return [func_opcode]
+
 --   result <- interpretProgram block
 --   let func_object = FuncObj {
 --         funcboj_arity=L.length params

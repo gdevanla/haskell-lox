@@ -153,8 +153,24 @@ test_while_false = testCase "test_while_false" $ do
   vm <- runInterpreter [Chunk (Seq.fromList opcodes)]
   let expected =
         M.fromList
-          [("result", DValue 10.0),
-           ("result1", DValue 10.0)]
+          [ ("result", DValue 10.0),
+            ("result1", DValue 10.0)
+          ]
+  assertEqual "" expected (globals vm)
+
+
+test_func_declaration = testCase "test_func_declaration" $ do
+  let code = "fun test_func(){print 10;}"
+  -- let code = "var result1; result1=100; print result1;"
+  opcodes' <- compileToByteCode . T.pack $ code
+  print opcodes'
+  let opcodes = fromRight [] opcodes'
+  vm <- runInterpreter [Chunk (Seq.fromList opcodes)]
+  let expected =
+        M.fromList
+          [ ("result", DValue 10.0),
+            ("result1", DValue 10.0)
+          ]
   assertEqual "" expected (globals vm)
 
 
@@ -210,6 +226,6 @@ test_expressions =
     L.map (uncurry test_compiler) testData
 
 main = do
-  defaultMain $ testGroup "test_vm" $ test_expressions : [test_locals, test_conditional_if, test_conditional_just_if, test_conditional_else, test_conditional_and, test_conditional_and_false, test_conditional_or, test_while, test_while_false]
+  defaultMain $ testGroup "test_vm" $ test_expressions : [test_locals, test_conditional_if, test_conditional_just_if, test_conditional_else, test_conditional_and, test_conditional_and_false, test_conditional_or, test_while, test_while_false, test_func_declaration]
 
 --defaultMain tests
