@@ -166,18 +166,7 @@ interpretStmt (StmtPrint expr) = do
   result <- interpret expr
   return $ result ++ [OpPrint]
 
-interpretStmt (StmtBlock program) = do
-  incrScopeDepth
-  result <- interpretProgram program
-  decrScopeDepth
-  env <- get
-  let l = locals env
-  let l' = L.length $ L.filter (go env) l
-  let locals' = L.filter (not . go env) l
-  put $ env {locals=locals'}
-  return $ result ++ L.replicate l' OpPop
-  where
-    go env (Local t offset) = offset > scope_depth env
+interpretStmt (StmtBlock program) = interpretAsBlock program
 
 interpretStmt (StmtIf (IfElse cond ifexpr elseexpr)) = do
   cond_result <- interpret cond
@@ -216,10 +205,8 @@ interpretDeclaration (DeclVar (Decl var Nothing)) = do
 interpretDeclaration (DeclStatement stmt) = interpretStmt stmt
 
 interpretDeclaration (DeclFun (Func !func_name !params !block)) = do
-  incrScopeDepth
-  result <- interpretProgram block
+  result <- interpretAsBlock block
   let func_obj = FuncObj 0 (Chunk $ Seq.fromList result) func_name
-  decrScopeDepth
   env <- get
   let func_opcode = OpConstant $ Function func_obj
   if scope_depth env == 0 then return $ func_opcode:[OpDefineGlobal func_name]
@@ -247,6 +234,19 @@ interpretDeclaration (DeclFun (Func !func_name !params !block)) = do
   --return LoxValueSentinel
 
 -- interpretProgram :: Program -> ByteCodeGenT [OpCode]
+
+interpretAsBlock program = do
+  incrScopeDepth
+  result <- interpretProgram program
+  decrScopeDepth
+  env <- get
+  let l = locals env
+  let l' = L.length $ L.filter (go env) l
+  let locals' = L.filter (not . go env) l
+  put $ env {locals = locals'}
+  return $ result ++ L.replicate l' OpPop
+  where
+    go env (Local t offset) = offset > scope_depth env
 
 interpretProgram :: Program -> ByteCodeGenT [OpCode]
 interpretProgram decls = do

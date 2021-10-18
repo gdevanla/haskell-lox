@@ -160,7 +160,7 @@ test_while_false = testCase "test_while_false" $ do
 
 
 test_func_declaration = testCase "test_func_declaration" $ do
-  let code = "fun test_func(){print 10;}"
+  let code = "fun test_func(){var x=10;} print test_func;"
   -- let code = "var result1; result1=100; print result1;"
   opcodes' <- compileToByteCode . T.pack $ code
   print opcodes'
