@@ -188,14 +188,14 @@ test_while_false = testCase "test_while_false" $ do
   assertEqual "" expected (globals vm)
 
 test_func_declaration = testCase "test_func_declaration" $ do
-  let code = "var g=0; fun test_func(a) {var x = 20; g=a;} test_func(10);"
+  let code = "var g=0; fun test_func(a) {var x = 20; g=x+a+x;} test_func(10);"
   -- let code = "var result1; result1=100; print result1;"
   opcodes' <- compileToByteCode . T.pack $ code
   -- print opcodes'
   let opcodes = fromRight [] opcodes'
   vm <- runInterpreter [Chunk (Seq.fromList opcodes)]
   --print (vm_cf vm)
-  let expected = M.fromList [("g", DValue 20.0)]
+  let expected = M.fromList [("g", DValue 50.0)]
   assertEqual "" (M.delete "test_func" (globals vm)) expected
 
 
