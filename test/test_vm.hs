@@ -44,6 +44,35 @@ test_locals = testCase "test_locals" $ do
           ]
   assertEqual "" expected (globals vm)
 
+test_locals_simple = testCase "test_locals_simple" $ do
+  let code = "var result1; var x1=200; {var x=10; {result1=x;}}"
+  --let code = "var result1; result1=100; print result1;"
+  opcodes' <- compileToByteCode . T.pack $ code
+  --print opcodes'
+  let opcodes = fromRight [] opcodes'
+  vm <- runInterpreter [Chunk (Seq.fromList opcodes)]
+  let expected =
+        M.fromList
+          [ ("result1", DValue 10.0),
+            ("x1", DValue 200.0)
+          ]
+  assertEqual "" expected (globals vm)
+
+
+test_set_locals_simple = testCase "test_set_locals_simple" $ do
+  let code = "var result1; var x1=200; {var x=10; {x=15; result1=x;}}"
+  --let code = "var result1; result1=100; print result1;"
+  opcodes' <- compileToByteCode . T.pack $ code
+  --print opcodes'
+  let opcodes = fromRight [] opcodes'
+  vm <- runInterpreter [Chunk (Seq.fromList opcodes)]
+  let expected =
+        M.fromList
+          [ ("result1", DValue 15.0),
+            ("x1", DValue 200.0)
+          ]
+  assertEqual "" expected (globals vm)
+
 test_conditional_if = testCase "test_conditional_if" $ do
   let code = "var result;var x = 10; if (x==10) {result=true;} else {result=false;}"
   --let code = "var result1; result1=100; print result1;"
@@ -159,64 +188,86 @@ test_while_false = testCase "test_while_false" $ do
   assertEqual "" expected (globals vm)
 
 test_func_declaration = testCase "test_func_declaration" $ do
-  let code = "var g=0;fun test_func(a){var z=10; var y=10; var x=20; print z; print g;g=a*z*y-x;} test_func(10);"
+  let code = "var g=0; fun test_func(a) {var x = 20; g=a;} test_func(10);"
   -- let code = "var result1; result1=100; print result1;"
   opcodes' <- compileToByteCode . T.pack $ code
   -- print opcodes'
   let opcodes = fromRight [] opcodes'
   vm <- runInterpreter [Chunk (Seq.fromList opcodes)]
   --print (vm_cf vm)
-  let expected = M.fromList [("g",DValue 1990.0)]
+  let expected = M.fromList [("g", DValue 20.0)]
   assertEqual "" (M.delete "test_func" (globals vm)) expected
+
+
+test_func_declaration_1 = testCase "test_func_declaration_1" $ do
+  let code = "var g=0; fun test_func(a) {var x=20; g=x+a;} test_func(15);"
+  -- let code = "var result1; result1=100; print result1;"
+  opcodes' <- compileToByteCode . T.pack $ code
+  -- print opcodes'
+  let opcodes = fromRight [] opcodes'
+  vm <- runInterpreter [Chunk (Seq.fromList opcodes)]
+  --print (vm_cf vm)
+  let expected = M.fromList [("g", DValue 35.0)]
+  assertEqual "" expected (M.delete "test_func" (globals vm))
+
+
+test_func_declaration_2 = testCase "test_func_declaration_2" $ do
+  let code = "var g=0; fun test_func(a) {var x=20; x = -5; g=x+a;} test_func(15);"
+  -- let code = "var result1; result1=100; print result1;"
+  opcodes' <- compileToByteCode . T.pack $ code
+  -- print opcodes'
+  let opcodes = fromRight [] opcodes'
+  vm <- runInterpreter [Chunk (Seq.fromList opcodes)]
+  --print (vm_cf vm)
+  let expected = M.fromList [("g", DValue 10.0)]
+  assertEqual "" expected (M.delete "test_func" (globals vm))
 
 testData =
   let expected =
-        [ -- [("x", DValue 10.0)],
-          -- [("x", DValue 9.0)],
-          -- [("x", DValue 4.0)],
-          -- [("x", DValue 8.0)],
-          -- [("x", DValue 28.0)],
-          -- [("x", DValue 22.0)],
-          -- [("x", DValue 1.0)],
-          -- [("x", BValue True)],
-          -- [("x", BValue True)],
-          -- [("x", BValue True)],
-          -- [("x", BValue True)],
-          -- [("x", BValue False)],
-          -- [("x", BValue True)],
-          -- [("x", BValue True)],
-          -- [("x", SValue "test_var")],
-          -- [],
-          -- [("x", SValue "print this")], -- print statement, nothing on stack
-          -- [("x", DValue (-20.0))], -- var and print
-          -- [("x", DValue (-40.0))], -- var and print
-          -- [("x", DValue (-10)), ("y", DValue (-20))],
+        [ [("x", DValue 10.0)],
+          [("x", DValue 9.0)],
+          [("x", DValue 4.0)],
+          [("x", DValue 8.0)],
+          [("x", DValue 28.0)],
+          [("x", DValue 22.0)],
+          [("x", DValue 1.0)],
+          [("x", BValue True)],
+          [("x", BValue True)],
+          [("x", BValue True)],
+          [("x", BValue True)],
+          [("x", BValue False)],
+          [("x", BValue True)],
+          [("x", BValue True)],
+          [("x", SValue "test_var")],
           [],
-          []
+          [("x", SValue "print this")], -- print statement, nothing on stack
+          [("x", DValue (-20.0))], -- var and print
+          [("x", DValue (-40.0))], -- var and print
+          [("x", DValue (-10)), ("y", DValue (-20))]
         ]
       expressions =
-        [ -- "var x=1+2+3+4;",
-          -- "var x=10-2+1;",
-          -- "var x=10-5-1;",
-          -- "var x=10+2*3-8;",
-          -- "var x=(10+2)*3-8;",
-          -- "var x=10*2+4/2;",
-          -- "var x=10/2-4;",
-          -- "var x=true;",
-          -- "var x=1<2;",
-          -- "var x=2>1;",
-          -- "var x=5==5;",
-          -- "var x=5!=5;",
-          -- "var x=5<=5;",
-          -- "var x=5>=5;",
-          -- "var x=\"test_var\";",
-          -- "print 10000+20000;",
-          -- "var x = \"print this\";print x;",
-          -- "var x=-10;x=x+x;",
-          -- "var x=-10;x=-20;x=x+x;",
-          -- "var x=-10;var y=-20;",
-          "var a; {fun func(z){var x=1; var y=20; print \"y=\"; print y; print \"x=\"; print x; a=x+y+z;}\nfunc(10)};",
-          "var a=10; fun func(x, y){var z=x+y; print z; a=z;}\n func(10, 20);"
+        [ "var x=1+2+3+4;",
+          "var x=10-2+1;",
+          "var x=10-5-1;",
+          "var x=10+2*3-8;",
+          "var x=(10+2)*3-8;",
+          "var x=10*2+4/2;",
+          "var x=10/2-4;",
+          "var x=true;",
+          "var x=1<2;",
+          "var x=2>1;",
+          "var x=5==5;",
+          "var x=5!=5;",
+          "var x=5<=5;",
+          "var x=5>=5;",
+          "var x=\"test_var\";",
+          "print 10000+20000;",
+          "var x = \"print this\";print x;",
+          "var x=-10;x=x+x;",
+          "var x=-10;x=-20;x=x+x;",
+          "var x=-10;var y=-20;"
+          -- "var a; {fun func(z){var x=1; var y=20; print \"y=\"; print y; print \"x=\"; print x; a=x+y+z;}\nfunc(10)};",
+          -- "var a=10; fun func(x, y){var z=x+y; print z; a=z;}\n func(10, 20);"
         ]
    in L.zip expressions expected
 
@@ -227,17 +278,21 @@ test_expressions =
 main = do
   defaultMain $
     testGroup "test_vm" $
-      --test_expressions :
-      [ -- test_locals,
-        -- test_conditional_if,
-        -- test_conditional_just_if,
-        -- test_conditional_else,
-        -- test_conditional_and,
-        -- test_conditional_and_false,
-        -- test_conditional_or,
-        -- test_while,
-        -- test_while_false,
-        test_func_declaration
+      test_expressions :
+      [ test_locals,
+        test_locals_simple,
+        test_set_locals_simple,
+        test_conditional_if,
+        test_conditional_just_if,
+        test_conditional_else,
+        test_conditional_and,
+        test_conditional_and_false,
+        test_conditional_or,
+        test_while,
+        test_while_false,
+        test_func_declaration,
+        test_func_declaration_1,
+        test_func_declaration_2
       ]
 
 --defaultMain tests

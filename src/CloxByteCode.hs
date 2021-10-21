@@ -22,11 +22,11 @@ data FuncObj = FuncObj {
                        }
                deriving (Eq)
 
-instance Show FuncObj where
-  show f = "<funcobj:" ++ (T.unpack . funcobj_name $ f) ++ ">"
-
 -- instance Show FuncObj where
---   show funcobj = show $ "<funcobj: " <> funcobj_name funcobj <> ">"
+--   show f = "<funcobj:" ++ (T.unpack . funcobj_name $ f) ++ ">"
+
+instance Show FuncObj where
+  show funcobj = show $ "<funcobj: " <> funcobj_name funcobj <> ">"
 
 data OpCode
   = OpReturn

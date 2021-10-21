@@ -38,8 +38,11 @@ data Local = Local T.Text Int deriving (Show, Eq)
 initEnv :: Env
 initEnv = Env {local_count = 0, scope_depth = 0, locals = [Local "" 0], chunk_type = ChunkScript}
 
-initEnvFunc :: Env
-initEnvFunc = Env {local_count = 0, scope_depth = 0, locals = [Local "" 0], chunk_type = ChunkFunction}
+initEnvFunc :: T.Text -> [T.Text] -> Int -> Env
+initEnvFunc funcname params scope = let
+  all_locals = L.reverse $ Local funcname scope:[Local x scope |  x<-params]
+  in
+  Env {local_count = 0, scope_depth = scope, locals = all_locals, chunk_type = ChunkFunction}
 
 updateScopeDepth :: (Int->Int->Int) -> ByteCodeGenT ()
 updateScopeDepth op = do
@@ -137,6 +140,8 @@ interpret (Call !expr !arguments _) = do
   func <- interpret expr
   args <- mapM interpret arguments
   let args' = L.concat args
+  liftIO $ print "Setting up call........''"
+  liftIO $ print args'
   return $ func ++ args' ++ [OpCall (L.length args)]
   -- case func of
   --   Function fo@FuncObj{..} -> undefined
@@ -177,7 +182,17 @@ interpretStmt (StmtPrint expr) = do
   result <- interpret expr
   return $ result ++ [OpPrint]
 
-interpretStmt (StmtBlock program) = interpretAsBlock program
+interpretStmt (StmtBlock program) = do
+  --void declareBlockName
+  interpretAsBlock program
+  where
+    -- need to simulare function name
+    declareBlockName :: ByteCodeGenT ()
+    declareBlockName = do
+      env <- get
+      let scope = scope_depth env
+      put $ env {locals = Local "block" scope : locals env}
+
 
 interpretStmt (StmtIf (IfElse cond ifexpr elseexpr)) = do
   cond_result <- interpret cond
@@ -219,34 +234,35 @@ interpretDeclaration (DeclVar (Decl var Nothing)) = do
 interpretDeclaration (DeclStatement stmt) = interpretStmt stmt
 
 interpretDeclaration (DeclFun (Func !func_name !params !block)) = do
-  void $ declareFunctionName func_name
-  x <- liftIO $ evalStateT (runExceptT (interpretAsBlock block)) initEnvFunc
+  -- void $ declareFunctionName func_name
+  x <- liftIO $ evalStateT (runExceptT (interpretAsBlock block)) (initEnvFunc func_name params 0)
   liftIO $ print $ "funcbloc" ++ show x
   case x of
     Right block_codes -> buildFunction block_codes func_name
     Left x -> error $ show x
   where
     buildFunction :: [OpCode] -> T.Text -> ByteCodeGenT [OpCode]
-    buildFunction opcodes func_name = do
-      let func_obj = FuncObj 0 (Chunk $ Seq.fromList opcodes) func_name
+    buildFunction opcodes func_name' = do
+      let func_obj = FuncObj (L.length params) (Chunk $ Seq.fromList opcodes) func_name
       env <- get
       let func_opcode = OpConstant $ Function func_obj
       if scope_depth env == 0
-        then return $ func_opcode : [OpDefineGlobal func_name]
+        then return $ func_opcode : [OpDefineGlobal func_name']
         else do
         let scope = scope_depth env
-        put $ env {locals = Local func_name scope : locals env}
+        let all_locals = Local func_name' scope:locals env
+        put $ env {locals = all_locals}
         return [func_opcode]
 
-    declareFunctionName :: T.Text  -> ByteCodeGenT [OpCode]
+    declareFunctionName :: T.Text -> ByteCodeGenT [OpCode]
     declareFunctionName func_name = do
       env <- get
       if scope_depth env == 0
         then return [OpDefineGlobal func_name]
         else do
-        let scope = scope_depth env
-        put $ env {locals = Local func_name scope : locals env}
-        return []
+          let scope = scope_depth env
+          put $ env {locals = Local func_name scope : locals env}
+          return []
 
 
 --   result <- interpretProgram block

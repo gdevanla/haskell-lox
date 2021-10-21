@@ -46,7 +46,7 @@ testData = let
       "10-2+1;",
       "10-5-1;",
       "10+2*3-8;",
-      "(10+2)*3-8;",
+      "(10+2)*3-8;"
       ]
   in
   L.zip expressions expected

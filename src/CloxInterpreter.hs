@@ -67,7 +67,15 @@ peek = do
 peekN :: Int -> CloxIO Value
 peekN offset = do
   vm <- get
-  return $ (L.!!) (L.reverse $ stack vm) offset -- fix this, this is O(n)
+  top_cf <- peekCF
+  let so = cf_stack_offset top_cf
+  return $ (L.!!) (L.reverse $ stack vm) (so + offset) -- fix this, this is O(n)
+
+peekCF :: CloxIO CallFrame
+peekCF = do
+  vm <- get
+  let cf :<| _ = un_cf $ vm_cf vm
+  return cf
 
 peekBack :: Int -> CloxIO Value
 peekBack offset = do
@@ -79,8 +87,13 @@ peekBack offset = do
 setLocal :: Int -> Value -> CloxIO ()
 setLocal offset value = do
   vm <- get
-  let (xs, _:xs') = L.splitAt (offset-1) (L.reverse $ stack vm)
+  liftIO $ print $ "before set local = " ++ show offset
+  liftIO $ print (stack vm)
+  cf <- peekCF
+  let so = cf_stack_offset cf
+  let (xs, _:xs') = L.splitAt (offset+so) (L.reverse $ stack vm)
   let !s'= xs ++ [value] ++ xs'
+  liftIO $ print (s')
   put $ vm {stack=L.reverse s'}
 
 updateGlobals :: T.Text -> Value -> CloxIO ()
@@ -109,7 +122,7 @@ initVM chunk =
       cf = CallFrame {cf_ip = 0, cf_funcobj = funcobj, cf_stack_offset = 0}
       cfs = CallFrames (cf <| Seq.empty)
    in VM
-        { stack = [],
+        { stack = [Function funcobj],
           debugMode = True,
           globals = M.empty,
           vm_cf = cfs
@@ -119,8 +132,11 @@ addCFToVM :: FuncObj -> CloxIO ()
 addCFToVM funcobj = do
   vm <- get
   let stacktop = L.length $ stack vm
+  liftIO $ print "adding CF to VM"
+  liftIO $ print vm
   let argCount = funcobj_arity funcobj
   let offset = stacktop - argCount - 1
+  liftIO $ print $ show stacktop ++ " " ++ show (funcobj_arity funcobj)
   let cf = CallFrame {cf_ip = 0, cf_funcobj = funcobj, cf_stack_offset = offset}
   let curr_cf = un_cf $ vm_cf vm
   let cfs = cf <| curr_cf
@@ -255,7 +271,7 @@ interpretByteCode OpLt = do
   return InterpretNoResult
 interpretByteCode OpPrint = do
   r <- pop
-  liftIO $ print $ "printinggggggggggggggggggggggggggggg" ++ show r
+  liftIO $ print $ "printing == " ++ show r
   liftIO $ print r  -- need to have specialized print for Value type
   return InterpretNoResult
 interpretByteCode (OpDefineGlobal var) = do
@@ -298,7 +314,7 @@ interpretByteCode OpPop = do
   void pop
   return InterpretNoResult
 interpretByteCode (OpJumpIfFalse offset) = do
-  val <- peekN 0
+  val <- peek
   vm <- get
   let is_truthy = isTruthy val
   unless is_truthy $ moveIP offset
@@ -348,10 +364,13 @@ isTruthy (BValue True) = True
 isTruthy (BValue False) = False
 isTruthy (SValue _) = True
 isTruthy NullValue = False
+isTruthy x = error $ show x
 
 
 interpretBinOp :: (Double -> Double -> Double) -> CloxIO InterpretResult
 interpretBinOp func = do
+  vm <- get
+  liftIO $ print (stack vm)
   (DValue v1) <- pop
   (DValue v2) <- pop
   let result = func v1 v2
