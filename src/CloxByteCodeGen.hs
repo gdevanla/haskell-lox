@@ -28,11 +28,12 @@ data Env = Env {
   local_count:: !Int,
   scope_depth:: !Int,
   locals:: ![Local]
-  }
+  } deriving (Show, Eq)
 
 data ChunkType = ChunkScript | ChunkFunction
+  deriving (Show, Eq)
 
-data Local = Local T.Text Int
+data Local = Local T.Text Int deriving (Show, Eq)
 
 initEnv :: Env
 initEnv = Env {local_count = 0, scope_depth = 0, locals = [Local "" 0], chunk_type = ChunkScript}
@@ -54,7 +55,7 @@ decrScopeDepth = updateScopeDepth (-)
 getLocalIndex :: T.Text -> ByteCodeGenT (Maybe Int)
 getLocalIndex key = do
   env <- get
-  let l' = locals env
+  let l' = L.reverse $ locals env
   return $ go key l' 0
   where
     go key' (Local n _:xs) offset = if n == key' then Just offset else go key' xs (offset + 1)
@@ -132,7 +133,14 @@ interpret (Logical expr1 op expr2) = do
       let op_jump = OpJump $ 1 + L.length expr2_opcode
       return $ expr1_opcode ++ [if_jump, op_jump, OpPop] ++ expr2_opcode
 
---interpret (Call !expr !arguments _) = do
+interpret (Call !expr !arguments _) = do
+  func <- interpret expr
+  args <- mapM interpret arguments
+  let args' = L.concat args
+  return $ func ++ args' ++ [OpCall (L.length args)]
+  -- case func of
+  --   Function fo@FuncObj{..} -> undefined
+  --   _ -> ExceptT . return . Left $! "Error calling" ++ show func_name
   -- !callee <- interpret expr
   -- !args <- mapM interpret arguments
   -- !orig <- get
@@ -147,7 +155,7 @@ interpret (Logical expr1 op expr2) = do
   --     !value <- catchError (interpretProgram block) f
   --     put orig
   --     return $! value
-  --   _ -> ExceptT . return . Left $! SystemError $ "Function not callable: " <> T.pack (show callee)
+
   -- where
   --   f (SystemError e) = ExceptT . return . Left $ SystemError e
   --   f (ControlFlow (LoxValueReturn e)) = return e
@@ -195,6 +203,9 @@ interpretDeclaration (DeclVar (Decl var (Just expr))) = do
     else do
     let scope = scope_depth env
     put $ env {locals = Local var scope:locals env}
+    env' <- get
+    liftIO $ print "in declaration\n"
+    liftIO $ print $ show env'
     return result
 interpretDeclaration (DeclVar (Decl var Nothing)) = do
   let result = [OpConstant NullValue]
@@ -207,10 +218,10 @@ interpretDeclaration (DeclVar (Decl var Nothing)) = do
 
 interpretDeclaration (DeclStatement stmt) = interpretStmt stmt
 
-
 interpretDeclaration (DeclFun (Func !func_name !params !block)) = do
   void $ declareFunctionName func_name
   x <- liftIO $ evalStateT (runExceptT (interpretAsBlock block)) initEnvFunc
+  liftIO $ print $ "funcbloc" ++ show x
   case x of
     Right block_codes -> buildFunction block_codes func_name
     Left x -> error $ show x

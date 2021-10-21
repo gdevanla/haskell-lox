@@ -20,7 +20,10 @@ data FuncObj = FuncObj {
                        funcobj_chunk:: !Chunk,
                        funcobj_name:: !T.Text
                        }
-               deriving (Show, Eq)
+               deriving (Eq)
+
+instance Show FuncObj where
+  show f = "<funcobj:" ++ (T.unpack . funcobj_name $ f) ++ ">"
 
 -- instance Show FuncObj where
 --   show funcobj = show $ "<funcobj: " <> funcobj_name funcobj <> ">"

@@ -24,7 +24,7 @@ import Data.Sequence
 
 test_compiler input expected = testCase input $ do
   let x = fromRight LoxNil $ P.parse equality "" $ fromRight [] (scanner input)
-
+  print x
   (opcodes, _) <- liftIO $ runStateT (runExceptT (interpret x)) (initEnv)
   -- putStrLn opcodes
 
@@ -38,14 +38,15 @@ testData = let
     [OpConstant (DValue 10.0), OpConstant (DValue 2.0), OpMinus, OpConstant (DValue 1.0), OpAdd],
     [OpConstant (DValue 10.0), OpConstant (DValue 5.0), OpMinus, OpConstant (DValue 1.0), OpMinus],
     [OpConstant (DValue 10.0), OpConstant (DValue 2.0), OpConstant (DValue 3.0), OpStar, OpAdd, OpConstant (DValue 8.0), OpMinus],
-    [OpConstant (DValue 10.0), OpConstant (DValue 2.0), OpAdd, OpConstant (DValue 3.0), OpStar, OpConstant (DValue 8.0), OpMinus]
+    [OpConstant (DValue 10.0), OpConstant (DValue 2.0), OpAdd, OpConstant (DValue 3.0), OpStar, OpConstant (DValue 8.0), OpMinus],
+    []
     ]
   expressions = [
       "1+2+3+4;",
       "10-2+1;",
       "10-5-1;",
       "10+2*3-8;",
-      "(10+2)*3-8;"
+      "(10+2)*3-8;",
       ]
   in
   L.zip expressions expected

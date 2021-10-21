@@ -64,12 +64,17 @@ peek = do
   let x:_ = stack vm -- handle exhaustive patterns while pop too many values
   return x
 
-
-
 peekN :: Int -> CloxIO Value
 peekN offset = do
   vm <- get
   return $ (L.!!) (L.reverse $ stack vm) offset -- fix this, this is O(n)
+
+peekBack :: Int -> CloxIO Value
+peekBack offset = do
+  vm <- get
+  let offset' = L.length (stack vm) - offset - 1
+  peekN offset'
+
 
 setLocal :: Int -> Value -> CloxIO ()
 setLocal offset value = do
@@ -99,15 +104,28 @@ data InterpretResult =
 
 
 initVM :: Chunk -> VM
-initVM chunk = let
-  funcobj = FuncObj 0 chunk ""
-  cf = CallFrame {cf_ip=0, cf_funcobj=funcobj, cf_stack_offset=0}
-  cfs = CallFrames (cf<|Seq.empty)
-  in
-  VM {stack=[],
-                   debugMode=True,
-                   globals=M.empty,
-                   vm_cf=cfs}
+initVM chunk =
+  let funcobj = FuncObj 0 chunk ""
+      cf = CallFrame {cf_ip = 0, cf_funcobj = funcobj, cf_stack_offset = 0}
+      cfs = CallFrames (cf <| Seq.empty)
+   in VM
+        { stack = [],
+          debugMode = True,
+          globals = M.empty,
+          vm_cf = cfs
+        }
+
+addCFToVM :: FuncObj -> CloxIO ()
+addCFToVM funcobj = do
+  vm <- get
+  let stacktop = L.length $ stack vm
+  let argCount = funcobj_arity funcobj
+  let offset = stacktop - argCount - 1
+  let cf = CallFrame {cf_ip = 0, cf_funcobj = funcobj, cf_stack_offset = offset}
+  let curr_cf = un_cf $ vm_cf vm
+  let cfs = cf <| curr_cf
+  put $ vm { vm_cf = CallFrames cfs }
+
 
 moveIP :: Int -> CloxIO ()
 moveIP offset = do
@@ -149,6 +167,8 @@ interpret = go
       case opcode of
         Just oc -> do
           incrIP
+          liftIO $ print $ "interpreting" ++ show opcode
+          liftIO $ print oc
           void $ interpretByteCode oc
           go
         Nothing -> return ()
@@ -235,6 +255,7 @@ interpretByteCode OpLt = do
   return InterpretNoResult
 interpretByteCode OpPrint = do
   r <- pop
+  liftIO $ print $ "printinggggggggggggggggggggggggggggg" ++ show r
   liftIO $ print r  -- need to have specialized print for Value type
   return InterpretNoResult
 interpretByteCode (OpDefineGlobal var) = do
@@ -262,6 +283,10 @@ interpretByteCode (OpSetGlobal var) = do
     return InterpretNoResult
     else return $ InterpretRuntimeError $ "Key assigned before declaration: " <> var
 interpretByteCode (OpGetLocal i) = do
+  vm <- get
+  liftIO $ print "stack....\n"
+  liftIO $ print $ stack vm
+  liftIO $ print $ vm_cf vm
   val <- peekN i
   push val
   return InterpretNoResult
@@ -296,6 +321,22 @@ interpretByteCode (OpLoopStart offset) = do
   --vm <- get
   --liftIO $ print vm
   return InterpretNoResult
+interpretByteCode (OpCall x) = do
+  funcobj <- peekBack x
+  vm <- get
+  case funcobj of
+    Function fo@FuncObj{..} -> do
+      liftIO $ print "printing fo"
+      liftIO $ print vm
+      addCFToVM fo
+      vm <- get
+      liftIO $ print "printing fo after"
+      liftIO $ print vm
+      liftIO $ print fo
+      interpret
+      return InterpretNoResult
+    _ -> error $ "got non-callable" ++ show funcobj
+
 
 interpretByteCode x = do
   vm <- get
