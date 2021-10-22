@@ -1,3 +1,4 @@
+{-# LANGUAGE QuasiQuotes#-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 
@@ -20,6 +21,7 @@ import Scanner
 import Test.Tasty
 import Test.Tasty.HUnit
 import Text.Parsec as P
+import Data.String.QQ
 
 test_compiler input expected = testCase input $ do
   opcodes' <- compileToByteCode . T.pack $ input
@@ -275,6 +277,68 @@ test_expressions =
   testGroup "test_expressions" $
     L.map (uncurry test_compiler) testData
 
+
+test_while_loop_complex = testCase "test_while_loop_complex" $ do
+  let source =
+        [s|var x = 0;
+
+        var result = 0;
+
+        fun func(x1)
+            {
+              result = result + x1;
+            }
+
+        while (x < 5) {
+              x = x + 1;
+              if (x < 4) {
+                 func(x);
+               }
+        }
+
+        print result;
+
+        |]
+
+  opcodes' <- compileToByteCode . T.pack $ source
+  print opcodes'
+  let opcodes = fromRight [] opcodes'
+  vm <- runInterpreter [Chunk (Seq.fromList opcodes)]
+  --print (vm_cf vm)
+  liftIO $ print vm
+  assertEqual "" (M.lookup "result" (globals vm)) (Just (DValue 6.0))
+
+test_nested_function_call = testCase "test_nested_function_call" $ do
+  let source =
+        [s|
+        var result = 0;
+
+        fun func2(a)
+                {
+                  result = result + a
+                }
+
+        fun func(a)
+            {
+                func2(-2);
+                {
+                        var x = 2000;
+                        func2(x);
+                }
+            }
+
+        func2(10);
+        func(10)
+
+          |]
+  opcodes' <- compileToByteCode . T.pack $ source
+  print opcodes'
+  let opcodes = fromRight [] opcodes'
+  vm <- runInterpreter [Chunk (Seq.fromList opcodes)]
+  --print (vm_cf vm)
+  liftIO $ print vm
+  assertEqual "" (M.lookup "result" (globals vm)) (Just (DValue 2008.0))
+
 main = do
   defaultMain $
     testGroup "test_vm" $
@@ -292,7 +356,10 @@ main = do
         test_while_false,
         test_func_declaration,
         test_func_declaration_1,
-        test_func_declaration_2
+        test_func_declaration_2,
+        test_while_loop_complex,
+        test_nested_function_call
+
       ]
 
 --defaultMain tests

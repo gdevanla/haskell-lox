@@ -1,14 +1,17 @@
 var x = 0;
 
+var result = 0;
+
 fun func(x)
     {
-        print "printing====";
-        print x;
+      result = result + x;
     }
 
 while (x < 5) {
       x = x + 1;
-      if (x < 2) {
+      if (x < 4) {
          func(x);
        }
 }
+
+

@@ -1,6 +1,8 @@
+var result = 0;
+
 fun func2(a)
         {
-          print a;
+          result = result + a
         }
 
 fun func(a)
@@ -12,5 +14,6 @@ fun func(a)
         }
     }
 
-func(10);
+func2(10);
+func(10)
 

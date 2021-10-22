@@ -36,6 +36,7 @@ dependencies:
 - haskeline >= 0.8.2
 - time >= 1.9.3
 - vector >= 0.12.3.0
+- string-qq >= 0.0.4
 
 ghc-options:
 - -Wall
