@@ -193,6 +193,11 @@ interpretStmt (StmtBlock program) = do
       let scope = scope_depth env
       put $ env {locals = Local "block" scope : locals env}
 
+interpretStmt (StmtReturn (Just expr)) = do
+  opcodes <- interpret expr
+  return $ opcodes ++ [OpReturn]
+interpretStmt (StmtReturn Nothing) = return [OpConstant NullValue, OpReturn]
+
 
 interpretStmt (StmtIf (IfElse cond ifexpr elseexpr)) = do
   cond_result <- interpret cond

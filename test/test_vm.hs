@@ -190,7 +190,7 @@ test_while_false = testCase "test_while_false" $ do
   assertEqual "" expected (globals vm)
 
 test_func_declaration = testCase "test_func_declaration" $ do
-  let code = "var g=0; fun test_func(a) {var x = 20; g=x+a+x;} test_func(10);"
+  let code = "var g=0; fun test_func(a) {var x = 20; g=x+a+x;return;} test_func(10);"
   -- let code = "var result1; result1=100; print result1;"
   opcodes' <- compileToByteCode . T.pack $ code
   -- print opcodes'
@@ -202,7 +202,7 @@ test_func_declaration = testCase "test_func_declaration" $ do
 
 
 test_func_declaration_1 = testCase "test_func_declaration_1" $ do
-  let code = "var g=0; fun test_func(a) {var x=20; g=x+a;} test_func(15);"
+  let code = "var g=0; fun test_func(a) {var x=20; g=x+a; return;} test_func(15);"
   -- let code = "var result1; result1=100; print result1;"
   opcodes' <- compileToByteCode . T.pack $ code
   -- print opcodes'
@@ -214,7 +214,7 @@ test_func_declaration_1 = testCase "test_func_declaration_1" $ do
 
 
 test_func_declaration_2 = testCase "test_func_declaration_2" $ do
-  let code = "var g=0; fun test_func(a) {var x=20; x = -5; g=x+a;} test_func(15);"
+  let code = "var g=0; fun test_func(a) {var x=20; x = -5; g=x+a; return;} test_func(15);"
   -- let code = "var result1; result1=100; print result1;"
   opcodes' <- compileToByteCode . T.pack $ code
   -- print opcodes'
@@ -287,6 +287,7 @@ test_while_loop_complex = testCase "test_while_loop_complex" $ do
         fun func(x1)
             {
               result = result + x1;
+              return;
             }
 
         while (x < 5) {
@@ -310,12 +311,12 @@ test_while_loop_complex = testCase "test_while_loop_complex" $ do
 
 test_nested_function_call = testCase "test_nested_function_call" $ do
   let source =
-        [s|
-        var result = 0;
+        [s|var result = 0;
 
         fun func2(a)
                 {
-                  result = result + a
+                  result = result + a;
+                  return result;
                 }
 
         fun func(a)
@@ -323,12 +324,13 @@ test_nested_function_call = testCase "test_nested_function_call" $ do
                 func2(-2);
                 {
                         var x = 2000;
-                        func2(x);
+                        return func2(x);
+
                 }
             }
 
         func2(10);
-        func(10)
+        var result2 = func(10)
 
           |]
   opcodes' <- compileToByteCode . T.pack $ source
@@ -337,7 +339,36 @@ test_nested_function_call = testCase "test_nested_function_call" $ do
   vm <- runInterpreter [Chunk (Seq.fromList opcodes)]
   --print (vm_cf vm)
   liftIO $ print vm
-  assertEqual "" (M.lookup "result" (globals vm)) (Just (DValue 2008.0))
+  assertEqual "" (M.lookup "result" (globals vm)) (Just (DValue 10.0))
+
+
+
+test_return_statement = testCase "test_return_statement" $ do
+  let source =
+        [s|var result = 0;
+
+        fun func2(a)
+                {
+                  result = result + a;
+                  return;
+                }
+
+        fun func(a)
+            {
+                func2(-2);
+                return 200;
+            }
+
+        var result1 = func(10);
+        |]
+  opcodes' <- compileToByteCode . T.pack $ source
+  print opcodes'
+  let opcodes = fromRight [] opcodes'
+  vm <- runInterpreter [Chunk (Seq.fromList opcodes)]
+  --print (vm_cf vm)
+  liftIO $ print vm
+  -- assertEqual "" (M.lookup "result" (globals vm)) (Just (DValue 2008.0))
+  assertEqual "" (M.lookup "result1" (globals vm)) (Just (DValue 200))
 
 main = do
   defaultMain $
@@ -358,7 +389,8 @@ main = do
         test_func_declaration_1,
         test_func_declaration_2,
         test_while_loop_complex,
-        test_nested_function_call
+        test_nested_function_call,
+        test_return_statement
 
       ]
 

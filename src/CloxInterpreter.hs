@@ -77,12 +77,14 @@ peekCF = do
   let cf :<| _ = un_cf $ vm_cf vm
   return cf
 
-popCF :: CloxIO ()
+popCF :: CloxIO Value
 popCF = do
   vm <- get
   let cf :<| cfs = un_cf $ vm_cf vm
+  result <- peek
   let stack' = L.reverse $ L.take (cf_stack_offset cf) (L.reverse $ stack vm)
   put $ vm {vm_cf = CallFrames cfs, stack=stack'}
+  return result
 
 peekBack :: Int -> CloxIO Value
 peekBack offset = do
@@ -138,12 +140,12 @@ initVM chunk =
 addCFToVM :: FuncObj -> CloxIO ()
 addCFToVM funcobj = do
   vm <- get
-  liftIO $ print "adding CF to VM"
+  -- liftIO $ print "adding CF to VM"
   let stacktop = L.length $ stack vm
-  liftIO $ print vm
+  -- liftIO $ print vm
   let argCount = funcobj_arity funcobj
   let offset = stacktop - argCount - 1
-  liftIO $ print $ show stacktop ++ " " ++ show (funcobj_arity funcobj)
+  -- liftIO $ print $ show stacktop ++ " " ++ show (funcobj_arity funcobj)
   let cf = CallFrame {cf_ip = 0, cf_funcobj = funcobj, cf_stack_offset = offset}
   let curr_cf = un_cf $ vm_cf vm
   let cfs = cf <| curr_cf
@@ -190,8 +192,8 @@ interpret = go
       case opcode of
         Just oc -> do
           incrIP
-          liftIO $ print $ "interpreting" ++ show opcode
-          liftIO $ print oc
+          -- liftIO $ print $ "interpreting" ++ show opcode
+          -- liftIO $ print oc
           void $ interpretByteCode oc
           go
         Nothing -> return ()
@@ -224,7 +226,10 @@ interpretByteCode (OpConstant func) = do
     push func
     -- liftIO $ putStrLn ("\n"::[Char])
     return InterpretNoResult
-interpretByteCode OpReturn = return InterpretOK
+interpretByteCode OpReturn = do
+  result <- popCF
+  push result
+  return InterpretOK
 interpretByteCode OpNegate = do
   (DValue v) <- pop
   let result = DValue (-v)
@@ -278,18 +283,18 @@ interpretByteCode OpLt = do
   return InterpretNoResult
 interpretByteCode OpPrint = do
   r <- pop
-  liftIO $ print $ "printing == " ++ show r
+  -- liftIO $ print $ "printing == " ++ show r
   liftIO $ print r  -- need to have specialized print for Value type
   return InterpretNoResult
 interpretByteCode (OpDefineGlobal var) = do
   vm <- get
-  liftIO $ print $ "in define" ++ show var
-  liftIO $ print vm
+  -- liftIO $ print $ "in define" ++ show var
+  -- liftIO $ print vm
   val <- pop
   updateGlobals var val
   vm <- get
-  liftIO $ print $ "in define" ++ show var
-  liftIO $ print vm
+  -- liftIO $ print $ "in define" ++ show var
+  -- liftIO $ print vm
   return InterpretNoResult
 interpretByteCode (OpGetGlobal var) = do
   val <- getGlobal var
@@ -307,12 +312,12 @@ interpretByteCode (OpSetGlobal var) = do
     else return $ InterpretRuntimeError $ "Key assigned before declaration: " <> var
 interpretByteCode (OpGetLocal i) = do
   vm <- get
-  liftIO $ print "stack....\n"
-  liftIO $ print $ stack vm
-  liftIO $ print $ vm_cf vm
-  liftIO $ print $ "in OpGetLocal = " ++ show i
+  -- liftIO $ print "stack....\n"
+  -- liftIO $ print $ stack vm
+  -- liftIO $ print $ vm_cf vm
+  -- liftIO $ print $ "in OpGetLocal = " ++ show i
   val <- peekN i
-  liftIO $ print $ "in OpGetLocal, got = " ++ show val
+  -- liftIO $ print $ "in OpGetLocal, got = " ++ show val
   push val
   return InterpretNoResult
 interpretByteCode (OpSetLocal i) = do
@@ -327,7 +332,7 @@ interpretByteCode (OpJumpIfFalse offset) = do
   vm <- get
   let is_truthy = isTruthy val
   unless is_truthy $ moveIP offset
-  liftIO $ print $ "in false" ++ show val
+  -- liftIO $ print $ "in false" ++ show val
   vm <- get
   -- liftIO $ print vm
   -- liftIO $ print offset
@@ -354,20 +359,21 @@ interpretByteCode (OpCall x) = do
   -- liftIO $ print (stack vm)
   case funcobj of
     Function fo@FuncObj{..} -> do
-      liftIO $ print "printing fo"
-      liftIO $ print vm
-      liftIO $ print funcobj
+      -- liftIO $ print "printing fo"
+      -- liftIO $ print vm
+      -- liftIO $ print funcobj
       addCFToVM fo
       vm <- get
-      liftIO $ print "printing fo after"
-      liftIO $ print vm
-      liftIO $ print fo
-      liftIO $ print (stack vm)
+      -- liftIO $ print "printing fo after"
+      -- liftIO $ print vm
+      -- liftIO $ print fo
+      -- liftIO $ print (stack vm)
       interpret
-      popCF
+      --popCF
       interpret
       return InterpretNoResult
     _ -> error $ "got non-callable" ++ show funcobj
+
 
 
 interpretByteCode x = do
@@ -386,12 +392,12 @@ isTruthy x = error $ show x
 interpretBinOp :: (Double -> Double -> Double) -> CloxIO InterpretResult
 interpretBinOp func = do
   vm <- get
-  --liftIO $ print (stack vm)
+  ---- liftIO $ print (stack vm)
   (DValue v1) <- pop
   (DValue v2) <- pop
   let result = func v1 v2
   push (DValue result)
-  -- liftIO $ print $ show result
+  -- -- liftIO $ print $ show result
   -- debugPrint result
   return InterpretNoResult
 

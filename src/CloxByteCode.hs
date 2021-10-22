@@ -32,8 +32,8 @@ data FuncObj = FuncObj {
 -- showFuncObj funcobj = show $ "<funcobj: " <> funcobj_name funcobj <> ">"
 
 data OpCode
-  = OpReturn
-  | OpConstant !Value
+  =
+  OpConstant !Value
   | OpNegate
   | OpAdd
   | OpMinus
@@ -58,6 +58,7 @@ data OpCode
   | OpJump !Int
   | OpLoopStart !Int
   | OpCall !Int -- arg count
+  | OpReturn
   deriving (Show, Eq)
 
 newtype Chunk = Chunk {unChunk :: Seq OpCode}

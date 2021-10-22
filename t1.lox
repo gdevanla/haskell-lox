@@ -3,6 +3,6 @@ fun fib(n) {
     return fib(n-2) + fib(n-1);
 }
 
-var k = 10;
+var k = 30;
 print k;
 print fib(k);
