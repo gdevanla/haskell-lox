@@ -33,7 +33,7 @@ data Env = Env {
 data ChunkType = ChunkScript | ChunkFunction
   deriving (Show, Eq)
 
-data Local = Local T.Text Int deriving (Show, Eq)
+data Local = Local !T.Text {-#UNPACK#-} !Int deriving (Show, Eq)
 
 initEnv :: Env
 initEnv = Env {local_count = 0, scope_depth = 0, locals = [Local "" 0], chunk_type = ChunkScript}

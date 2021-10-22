@@ -20,8 +20,8 @@ import CloxByteCode
 import CloxCompiler
 
 data CallFrame = CallFrame {
-  cf_ip :: !Int,
-  cf_funcobj:: FuncObj,
+  cf_ip :: {-#UNPACK#-} !Int,
+  cf_funcobj:: !FuncObj,
   cf_stack_offset:: !Int
   }
   deriving (Show, Eq)
@@ -32,11 +32,12 @@ newtype CallFrames = CallFrames {un_cf:: Seq CallFrame}
 data VM = VM {
              -- chunk :: !Chunk,
              -- ip:: !Int,
-             vm_cf:: CallFrames,
+             vm_cf:: !CallFrames,
 
              -- stack_index:: !Int,  -- we are going to use this to decide whether to skip instructions
-             stack :: [Value],
-             debugMode :: Bool,
+             -- stack :: [Value],
+             stack :: !(Seq Value),
+             debugMode :: !Bool,
              globals:: !(M.Map T.Text Value)
 
              }
@@ -45,7 +46,7 @@ data VM = VM {
 push :: Value -> CloxIO ()
 push value = do
   vm <- get
-  put $ vm {stack=value:stack vm}
+  put $ vm {stack=value:<|stack vm}
 
 type CloxIO a = ExceptT T.Text (StateT VM IO) a
 
@@ -54,22 +55,23 @@ pop = do
   vm <- get
   -- liftIO $ print vm
   -- liftIO $ print vm
-  let x : xs = stack vm -- handle exhaustive patterns while pop too many values
+  let x :<| xs = stack vm -- handle exhaustive patterns while pop too many values
   put $ vm {stack = xs}
   return x
 
 peek :: CloxIO Value
 peek = do
   vm <- get
-  let x:_ = stack vm -- handle exhaustive patterns while pop too many values
+  let x:<|_ = stack vm -- handle exhaustive patterns while pop too many values
   return x
 
 peekN :: Int -> CloxIO Value
 peekN offset = do
   vm <- get
   top_cf <- peekCF
-  let so = cf_stack_offset top_cf
-  return $ (L.!!) (L.reverse $ stack vm) (so + offset) -- fix this, this is O(n)
+  let so = cf_stack_offset top_cf + offset
+  --return $ (L.!!) (L.reverse $ stack vm) (so + offset) -- fix this, this is O(n)
+  return $ Seq.index (stack vm) (Seq.length (stack vm) - so - 1)
 
 peekCF :: CloxIO CallFrame
 peekCF = do
@@ -82,15 +84,17 @@ popCF = do
   vm <- get
   let cf :<| cfs = un_cf $ vm_cf vm
   result <- peek
-  let stack' = L.reverse $ L.take (cf_stack_offset cf) (L.reverse $ stack vm)
+  --let stack' = L.reverse $ L.take (cf_stack_offset cf) (L.reverse $ stack vm)
+  let stack' = Seq.drop (Seq.length (stack vm) - cf_stack_offset cf) (stack vm)
   put $ vm {vm_cf = CallFrames cfs, stack=stack'}
   return result
 
 peekBack :: Int -> CloxIO Value
 peekBack offset = do
   vm <- get
-  let offset' = L.length (stack vm) - offset - 1
-  return $ (L.!!) (L.reverse $ stack vm) (offset') -- fix this, this is O(n)
+  let so = L.length (stack vm) - offset - 1
+  -- return $ (L.!!) (L.reverse $ stack vm) (offset') -- fix this, this is O(n)
+  return $ Seq.index (stack vm) (Seq.length (stack vm) - so - 1)
   -- peekN offset'
 
 setLocal :: Int -> Value -> CloxIO ()
@@ -99,11 +103,12 @@ setLocal offset value = do
   --liftIO $ print $ "before set local = " ++ show offset
   --liftIO $ print (stack vm)
   cf <- peekCF
-  let so = cf_stack_offset cf
-  let (xs, _:xs') = L.splitAt (offset+so) (L.reverse $ stack vm)
-  let !s'= xs ++ [value] ++ xs'
+  let so = Seq.length (stack vm) - cf_stack_offset cf  - offset - 1
+  let stack' = Seq.update so value (stack vm)
+  --let (xs, _:xs') = L.splitAt so (L.reverse $ stack vm)
+  --let !s'= xs ++ [value] ++ xs'
   -- liftIO $ print (s')
-  put $ vm {stack=L.reverse s'}
+  put $ vm {stack=stack'}
 
 updateGlobals :: T.Text -> Value -> CloxIO ()
 updateGlobals k v = do
@@ -131,7 +136,7 @@ initVM chunk =
       cf = CallFrame {cf_ip = 0, cf_funcobj = funcobj, cf_stack_offset = 0}
       cfs = CallFrames (cf <| Seq.empty)
    in VM
-        { stack = [Function funcobj],
+        { stack = Function funcobj:<|Seq.empty,
           debugMode = True,
           globals = M.empty,
           vm_cf = cfs
@@ -150,7 +155,6 @@ addCFToVM funcobj = do
   let curr_cf = un_cf $ vm_cf vm
   let cfs = cf <| curr_cf
   put $ vm { vm_cf = CallFrames cfs }
-
 
 moveIP :: Int -> CloxIO ()
 moveIP offset = do
