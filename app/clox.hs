@@ -10,7 +10,11 @@ import Data.Text.Encoding
 -- import Text.Parsec.String.Char
 -- import Text.Parsec.String.Char (anyCh
 
-import ExprInterpreter
+import CloxInterpreter
+import CloxByteCodeGen
+import CloxByteCode
+import Data.Sequence as Seq
+
 import FunctionsAndTypesForParsing (parseWithEof, parseWithLeftOver, regularParse)
 import Import hiding (many, try, (<|>))
 import qualified Paths_haskell_lox
@@ -32,6 +36,11 @@ main = runSimpleApp $ do
     filename : _ -> do
       contents <- decodeUtf8 <$> BS.readFile filename
       void $ liftIO $ runScript contents
-    [] -> do
-      void $ liftIO runScriptInteractive
-      liftIO $ return ()
+    [] -> error "no file name provided"
+
+runScript :: T.Text -> IO ()
+runScript contents = do
+  opcodes' <- compileToByteCode contents
+  case opcodes' of
+    Right bc -> void $ runInterpreter [Chunk (Seq.fromList bc)]
+    Left e -> error $ T.unpack e

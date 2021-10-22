@@ -235,7 +235,9 @@ interpretDeclaration (DeclStatement stmt) = interpretStmt stmt
 
 interpretDeclaration (DeclFun (Func !func_name !params !block)) = do
   -- void $ declareFunctionName func_name
-  x <- liftIO $ evalStateT (runExceptT (interpretAsBlock block)) (initEnvFunc func_name params 0)
+  vm <- get
+  let curr_scope = scope_depth vm
+  x <- liftIO $ evalStateT (runExceptT (interpretAsBlock block)) (initEnvFunc func_name params curr_scope)
   liftIO $ print $ "funcbloc" ++ show x
   case x of
     Right block_codes -> buildFunction block_codes func_name

@@ -77,23 +77,30 @@ peekCF = do
   let cf :<| _ = un_cf $ vm_cf vm
   return cf
 
+popCF :: CloxIO ()
+popCF = do
+  vm <- get
+  let cf :<| cfs = un_cf $ vm_cf vm
+  let stack' = L.reverse $ L.take (cf_stack_offset cf) (L.reverse $ stack vm)
+  put $ vm {vm_cf = CallFrames cfs, stack=stack'}
+
 peekBack :: Int -> CloxIO Value
 peekBack offset = do
   vm <- get
   let offset' = L.length (stack vm) - offset - 1
-  peekN offset'
-
+  return $ (L.!!) (L.reverse $ stack vm) (offset') -- fix this, this is O(n)
+  -- peekN offset'
 
 setLocal :: Int -> Value -> CloxIO ()
 setLocal offset value = do
   vm <- get
-  liftIO $ print $ "before set local = " ++ show offset
-  liftIO $ print (stack vm)
+  --liftIO $ print $ "before set local = " ++ show offset
+  --liftIO $ print (stack vm)
   cf <- peekCF
   let so = cf_stack_offset cf
   let (xs, _:xs') = L.splitAt (offset+so) (L.reverse $ stack vm)
   let !s'= xs ++ [value] ++ xs'
-  liftIO $ print (s')
+  -- liftIO $ print (s')
   put $ vm {stack=L.reverse s'}
 
 updateGlobals :: T.Text -> Value -> CloxIO ()
@@ -131,8 +138,8 @@ initVM chunk =
 addCFToVM :: FuncObj -> CloxIO ()
 addCFToVM funcobj = do
   vm <- get
-  let stacktop = L.length $ stack vm
   liftIO $ print "adding CF to VM"
+  let stacktop = L.length $ stack vm
   liftIO $ print vm
   let argCount = funcobj_arity funcobj
   let offset = stacktop - argCount - 1
@@ -303,7 +310,9 @@ interpretByteCode (OpGetLocal i) = do
   liftIO $ print "stack....\n"
   liftIO $ print $ stack vm
   liftIO $ print $ vm_cf vm
+  liftIO $ print $ "in OpGetLocal = " ++ show i
   val <- peekN i
+  liftIO $ print $ "in OpGetLocal, got = " ++ show val
   push val
   return InterpretNoResult
 interpretByteCode (OpSetLocal i) = do
@@ -320,8 +329,8 @@ interpretByteCode (OpJumpIfFalse offset) = do
   unless is_truthy $ moveIP offset
   liftIO $ print $ "in false" ++ show val
   vm <- get
-  liftIO $ print vm
-  liftIO $ print offset
+  -- liftIO $ print vm
+  -- liftIO $ print offset
   return InterpretNoResult
 interpretByteCode (OpJump offset) = do
   -- vm <- get
@@ -340,15 +349,22 @@ interpretByteCode (OpLoopStart offset) = do
 interpretByteCode (OpCall x) = do
   funcobj <- peekBack x
   vm <- get
+  -- liftIO $ print vm
+  -- liftIO $ print funcobj
+  -- liftIO $ print (stack vm)
   case funcobj of
     Function fo@FuncObj{..} -> do
       liftIO $ print "printing fo"
       liftIO $ print vm
+      liftIO $ print funcobj
       addCFToVM fo
       vm <- get
       liftIO $ print "printing fo after"
       liftIO $ print vm
       liftIO $ print fo
+      liftIO $ print (stack vm)
+      interpret
+      popCF
       interpret
       return InterpretNoResult
     _ -> error $ "got non-callable" ++ show funcobj
@@ -370,7 +386,7 @@ isTruthy x = error $ show x
 interpretBinOp :: (Double -> Double -> Double) -> CloxIO InterpretResult
 interpretBinOp func = do
   vm <- get
-  liftIO $ print (stack vm)
+  --liftIO $ print (stack vm)
   (DValue v1) <- pop
   (DValue v2) <- pop
   let result = func v1 v2

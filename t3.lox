@@ -1,0 +1,16 @@
+fun func2(a)
+        {
+          print a;
+        }
+
+fun func(a)
+    {
+        func2(-2);
+        {
+                var x = 2000;
+                func2(x);
+        }
+    }
+
+func(10);
+
