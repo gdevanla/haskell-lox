@@ -1,0 +1,20 @@
+var result = 0;
+
+fun func2(a)
+        {
+          result = result + a;
+          return;
+        }
+
+fun func(a)
+    {
+        func2(-2);
+        var x = 2000;
+        func2(x);
+        return 200;
+    }
+
+var result2 = func(10);
+print result2;
+ 
+    
