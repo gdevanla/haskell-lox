@@ -49,6 +49,7 @@ push value = do
   put $ vm {stack=value:<|stack vm}
 
 type CloxIO a = ExceptT T.Text (StateT VM IO) a
+-- IORef
 
 pop :: CloxIO Value
 pop = do
@@ -79,15 +80,6 @@ peekCF = do
   let cf :<| _ = un_cf $ vm_cf vm
   return cf
 
-popCF :: CloxIO Value
-popCF = do
-  vm <- get
-  let cf :<| cfs = un_cf $ vm_cf vm
-  result <- peek
-  --let stack' = L.reverse $ L.take (cf_stack_offset cf) (L.reverse $ stack vm)
-  let stack' = Seq.drop (Seq.length (stack vm) - cf_stack_offset cf) (stack vm)
-  put $ vm {vm_cf = CallFrames cfs, stack=stack'}
-  return result
 
 peekBack :: Int -> CloxIO Value
 peekBack offset = do
@@ -155,6 +147,16 @@ addCFToVM funcobj = do
   let curr_cf = un_cf $ vm_cf vm
   let cfs = cf <| curr_cf
   put $ vm { vm_cf = CallFrames cfs }
+
+popCF :: CloxIO Value
+popCF = do
+  vm <- get
+  let cf :<| cfs = un_cf $ vm_cf vm
+  result <- peek
+  --let stack' = L.reverse $ L.take (cf_stack_offset cf) (L.reverse $ stack vm)
+  let stack' = Seq.drop (Seq.length (stack vm) - cf_stack_offset cf) (stack vm)
+  put $ vm {vm_cf = CallFrames cfs, stack = stack'}
+  return result
 
 moveIP :: Int -> CloxIO ()
 moveIP offset = do
