@@ -92,7 +92,7 @@ popCF = do
 peekBack :: Int -> CloxIO Value
 peekBack offset = do
   vm <- get
-  let so = L.length (stack vm) - offset - 1
+  let so = Seq.length (stack vm) - offset - 1
   -- return $ (L.!!) (L.reverse $ stack vm) (offset') -- fix this, this is O(n)
   return $ Seq.index (stack vm) (Seq.length (stack vm) - so - 1)
   -- peekN offset'
