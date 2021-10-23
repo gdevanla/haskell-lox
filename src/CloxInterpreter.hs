@@ -162,14 +162,19 @@ moveIP offset = do
   let cf:<|xs = un_cf $ vm_cf vm
   let cf' = cf {cf_ip=cf_ip cf + offset}
   put $ vm {vm_cf=CallFrames $ cf'<|xs}
+{-# INLINE moveIP #-}
+
 
 incrIP = moveIP 1
+{-#INLINE incrIP#-}
+
 
 getNextOpCode = do
   vm <- get
   let cf:<|_ = un_cf $ vm_cf vm
   let !opcode = Seq.lookup (cf_ip cf) (unChunk (funcobj_chunk (cf_funcobj cf)))
   return opcode
+{-# INLINE getNextOpCode #-}
 
 freeVM :: VM
 freeVM = undefined
@@ -367,14 +372,14 @@ interpretByteCode (OpCall x) = do
       -- liftIO $ print vm
       -- liftIO $ print funcobj
       addCFToVM fo
-      vm <- get
+      --vm <- get
       -- liftIO $ print "printing fo after"
       -- liftIO $ print vm
       -- liftIO $ print fo
       -- liftIO $ print (stack vm)
-      interpret
+      --interpret
       --popCF
-      interpret
+      -- interpret
       return InterpretNoResult
     _ -> error $ "got non-callable" ++ show funcobj
 

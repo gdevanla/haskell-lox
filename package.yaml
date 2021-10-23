@@ -37,6 +37,7 @@ dependencies:
 - time >= 1.9.3
 - vector >= 0.12.3.0
 - string-qq >= 0.0.4
+- primitive >= 0.7.2.0
 
 ghc-options:
 - -Wall
