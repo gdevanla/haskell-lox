@@ -84,7 +84,7 @@ peekCF = do
 peekBack :: Int -> CloxIO Value
 peekBack offset = do
   vm <- get
-  let so = Seq.length (stack vm) - offset - 1
+  let so = L.length (stack vm) - offset - 1
   -- return $ (L.!!) (L.reverse $ stack vm) (offset') -- fix this, this is O(n)
   return $ Seq.index (stack vm) (Seq.length (stack vm) - so - 1)
   -- peekN offset'
@@ -379,9 +379,9 @@ interpretByteCode (OpCall x) = do
       -- liftIO $ print vm
       -- liftIO $ print fo
       -- liftIO $ print (stack vm)
-      --interpret
+      interpret
       --popCF
-      -- interpret
+      interpret
       return InterpretNoResult
     _ -> error $ "got non-callable" ++ show funcobj
 

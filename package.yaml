@@ -106,13 +106,13 @@ executables:
     - haskell-lox
     - optparse-simple
 
-    ghc-options:
+    #ghc-options:
     #- -rtsopts
-    - -O2
-    - -funfolding-use-threshold=16
-    - -fexcess-precision
-    - -optc-ffast-math
-    - -fprof-auto
+    #- -O2
+    #- -funfolding-use-threshold=16
+    #- -fexcess-precision
+    #- -optc-ffast-math
+    #- -fprof-auto
     #- -threaded
     #- -with-rtsopts=-N
 

@@ -3,4 +3,4 @@ def fib(n):
         return n
     return fib(n - 2) + fib(n - 1)
 
-print(fib(25))
+print(fib(30))
