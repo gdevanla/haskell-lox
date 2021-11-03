@@ -3,7 +3,7 @@
 
 module Scanner(LoxTok(..), LoxTokInfo(..), scanner) where
 
-import Import hiding (many, (<|>), try)
+import Import hiding (many, try, (<|>))
 import Data.Text as T
 import Data.Char
 import Text.Parsec.String as PS
@@ -79,13 +79,13 @@ type LoxScannerResult = Either ParseError [LoxTokInfo]
 
 whitespace :: Parser ()
 whitespace = void $ many $ oneOf " \n\t"
-
 -- whitespaceToken1 :: Parser LoxTokInfo
 -- whitespaceToken1 = do
 --   source_pos <- getPosition
 --   return $ LoxTokInfo WHITESPACE Nothing Nothing source_pos
 
 whitespaceToken :: Parser LoxTokInfo
+
 charMapping :: [(LoxTok, Char)]
 charMapping =
   [ (LEFT_PAREN, '('),
@@ -179,6 +179,7 @@ scanDouble = do
       void $ char '.'
       secondPart <- Text.Parsec.many1 digit <* whitespace
       return $ NUMBER $ read $ Import.concat [firstPart, ".", secondPart]
+
 -- -- https://stackoverflow.com/questions/24106314/parser-for-quoted-string-using-parsec
 escape :: Parser String
 escape = do
