@@ -5,7 +5,10 @@ import           Control.Monad.Primitive     (PrimMonad, PrimState)
 import qualified Data.ByteString.Lazy        as L
 import qualified Data.Vector.Generic.Mutable as M
 import qualified Data.Vector.Unboxed         as U
+-- import qualified Data.Vector.Mutable as M
+-- import qualified Data.Vector.Unboxed.Mutable as MU
 import           Data.Word                   (Word8)
+
 
 main :: IO ()
 main = do
@@ -14,7 +17,7 @@ main = do
 
     -- Create a new 256-size mutable vector
     -- Fill the vector with zeros
-    mutable <- M.replicate 256 0
+    mutable <- M.replicate 5 0
 
     -- Add all of the bytes from stdin
     addBytes mutable lbs

@@ -12,7 +12,7 @@ full types in Parsec.
 > import Text.Parsec.String.Parsec (parse)
 > import Text.Parsec.String.Char (oneOf)
 > import Text.Parsec.String.Combinator (eof,manyTill,anyToken)
-> import Control.Applicative ((<$>), (<*>), (<*), (*>), many)
+> import Control.Applicative (many)
 > import Control.Monad (void)
 
 

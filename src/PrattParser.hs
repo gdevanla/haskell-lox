@@ -104,7 +104,6 @@ infixPrecedence tok = case tok of
   Star -> 20
   Slash -> 20
   Exp -> 30
-  _ -> error $ "prec not defined for = " ++ show tok
 
 led :: Double -> Token -> TokenS
 led left tok = do
@@ -154,6 +153,7 @@ precedenceParser rbp = do
 evalExpression :: [String] -> [Double]
 evalExpression = map (evalState (precedenceParser 0) . fromRight [] . parseExpression)
 
+evalAll :: [Double]
 evalAll =
   evalExpression
     [ "1+2+3+4",

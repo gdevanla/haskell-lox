@@ -71,8 +71,8 @@ data LoxTokInfo = LoxTokInfo
   deriving (Show, Eq)
 
 
-tokenShow :: LoxTokInfo -> String
-tokenShow t = "LoxTok=" ++ show (tokinfo_type t)
+--tokenShow :: LoxTokInfo -> String
+--tokenShow t = "LoxTok=" ++ show (tokinfo_type t)
 
 type LoxScannerResult = Either ParseError [LoxTokInfo]
 -- type LoxScanner = Parsec String () [LoxTok]
@@ -151,14 +151,14 @@ keywordMapping =
     (WHILE, "while")
   ]
 
-scanKeywordToken :: Parser LoxTokInfo
-scanKeywordToken = do
-  source_pos <- getPosition
-  sel <- choice $ build <$> keywordMapping
-  return $ LoxTokInfo sel Nothing Nothing source_pos
-  where
-    build :: (LoxTok, String) -> Parser LoxTok
-    build (x, y) = x <$ string y <* whitespace
+-- scanKeywordToken :: Parser LoxTokInfo
+-- scanKeywordToken = do
+--   source_pos <- getPosition
+--   sel <- choice $ build <$> keywordMapping
+--   return $ LoxTokInfo sel Nothing Nothing source_pos
+--   where
+--     build :: (LoxTok, String) -> Parser LoxTok
+--     build (x, y) = x <$ string y <* whitespace
 
 whitespaceToken = do
   source_pos <- getPosition

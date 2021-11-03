@@ -10,7 +10,6 @@ import System.IO
 import Data.Text as T
 import Import hiding (many, try, (<|>))
 
-import Data.Time.Clock
 
 import ExprParser
 import Control.Monad.Except
@@ -19,10 +18,8 @@ import Control.Monad.State.Strict
 import Data.Maybe
 import Scanner as S
 import qualified Text.Parsec as P
-import qualified Control.Monad
 import System.Console.Haskeline
 import qualified Data.List as L
-import Control.Exception (throw)
 
 -- data NativeFunction = Clock |
 
@@ -33,10 +30,10 @@ data LoxValue
   = LoxValueString !T.Text
   | LoxValueDouble {-# UNPACK #-} !Double
   | LoxValueNil
-  | LoxValueBool {-# UNPACK #-}!Bool
+  | LoxValueBool !Bool
   | LoxValueIdentifier !T.Text
   | LoxValueSentinel -- This is more for the interpreter to return from statements
-  | LoxValueReturn {-# UNPACK #-}!LoxValue
+  | LoxValueReturn !LoxValue
   | LoxValueFunction !T.Text [T.Text] [Declaration] !Env -- Hold on to the AST and Closure
   deriving (Show, Eq)
 
@@ -96,6 +93,8 @@ showLoxValue LoxValueNil = "nil"
 showLoxValue (LoxValueBool b) = show b
 showLoxValue (LoxValueIdentifier b) = show b
 showLoxValue LoxValueSentinel = ""
+showLoxValue (LoxValueReturn v) = show v
+showLoxValue (LoxValueFunction fname _ _ _) = T.unpack $ "<" <> fname <> ">"
 
 unpackIdent :: LoxValue -> InterpreterTIO
 unpackIdent (LoxValueIdentifier x) = do
@@ -110,7 +109,7 @@ unpackIdent x = lift . return $ x
 type InterpreterTIO = ExceptT LoxError (StateT Env IO) LoxValue
 
 applyOpToDouble :: LoxValue -> LoxValue -> BinOp -> (Double -> Double -> Double) -> InterpreterTIO
-applyOpToDouble (LoxValueDouble !x) (LoxValueDouble !y) bop op = lift . return $ LoxValueDouble $ op x y
+applyOpToDouble (LoxValueDouble !x) (LoxValueDouble !y) _bop op = lift . return $ LoxValueDouble $ op x y
 applyOpToDouble !x !y !bop _ = ExceptT . return $ Left $ SystemError value
   where
     value =
@@ -124,7 +123,7 @@ applyOpToDouble !x !y !bop _ = ExceptT . return $ Left $ SystemError value
 --{-# INLINE applyOpToDouble #-}
 
 applyCompOpToDouble :: LoxValue -> LoxValue -> BinOp -> (Double -> Double -> Bool) -> InterpreterTIO
-applyCompOpToDouble (LoxValueDouble !x) (LoxValueDouble !y) bop op = lift . return $ LoxValueBool $ op x y
+applyCompOpToDouble (LoxValueDouble !x) (LoxValueDouble !y) _bop op = lift . return $ LoxValueBool $ op x y
 applyCompOpToDouble !x !y !bop _ = ExceptT . return $ Left $ SystemError value
   where
     value =
@@ -184,7 +183,7 @@ interpret (Binary expr1 op expr2) = do
       (LoxValueDouble x, LoxValueDouble y) -> lift . return $ LoxValueDouble $ x + y
       (x, y) -> ExceptT . return . Left $ SystemError $ T.pack $ "Unsupported operation (+) on "  ++ show x ++ " and " ++ show y
 interpret (Assignment lhs rhs) = do
-  s <- get
+  -- s <- get
   !lox_value <- interpret rhs
   s' <- get  -- need to get an s after all rhs are processed
   -- liftIO $ putStrLn "in assignment"

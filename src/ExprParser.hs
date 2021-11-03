@@ -239,7 +239,7 @@ equality = leftChain comparison (satisfyT f)
 
 assignment :: Parser Expr
 assignment = do
-  name <- satisfyT identifier -- for this version this will suffice
+  name <- satisfyT identifier' -- for this version this will suffice
   void $ satisfyT equals
   rhs <- try assignment <|> equality
   return $ Assignment name rhs
@@ -248,8 +248,8 @@ assignment = do
       EQUAL -> Just ()
       _ -> Nothing
 
-    identifier (LoxTokInfo (IDENTIFIER x) _ _ _) = Just (T.pack x)
-    identifier _ = Nothing
+    identifier' (LoxTokInfo (IDENTIFIER x) _ _ _) = Just (T.pack x)
+    identifier' _ = Nothing
 
 loxExpr :: Parser Expr
 loxExpr = try assignment <|> loxLogicOr
