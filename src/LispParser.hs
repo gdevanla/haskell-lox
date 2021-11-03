@@ -9,7 +9,6 @@ import Data.Char
 import Text.Parsec.Char as PC
 import Text.Parsec
 import Text.Parsec.String as PS
-import qualified RIO as Data.Functor
 
 data LispToken =
   LParen
@@ -115,8 +114,10 @@ satisfyLambda :: LispToken -> Maybe Bool
 satisfyLambda (Symbol s) = Just $ s == "lambda"
 satisfyLambda _ = Nothing
 
+exprVar :: LispParser Expr
 exprVar = satisfyTok satisfySymbol
 
+exprLambda :: ParsecT [LispToken] () Identity Expr
 exprLambda = do
   void $ satisfyTok satisfyLParen
   void $ satisfyTok satisfyLambda
@@ -127,6 +128,7 @@ exprLambda = do
   void $ satisfyTok satisfyRParen
   return $ ExprLambda ids expr
 
+exprApp :: ParsecT [LispToken] () Identity Expr
 exprApp = do
   void $ satisfyTok satisfyLParen
   rator <- exprExpr
@@ -134,6 +136,7 @@ exprApp = do
   void $ satisfyTok satisfyRParen
   return $ ExprApp rator expressions
 
+exprExpr :: ParsecT [LispToken] () Identity Expr
 exprExpr = do
   x <- try exprLambda
     <|> try exprApp
