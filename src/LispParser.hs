@@ -193,12 +193,6 @@ parseExpr = exprExpr
 lexAndParse :: String -> ParserResult
 lexAndParse s = case lexer s of
   Right toks -> parse parseExpr "" toks
-  Left e -> error $ show e
+  Left e -> Left e
 
--- (if (a y)
---     ((lambda (a)
---        (x a))
---       z)
---     ((lambda (x)
---        (c d))
---       z))
+--
