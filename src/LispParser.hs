@@ -194,5 +194,3 @@ lexAndParse :: String -> ParserResult
 lexAndParse s = case lexer s of
   Right toks -> parse parseExpr "" toks
   Left e -> Left e
-
---
