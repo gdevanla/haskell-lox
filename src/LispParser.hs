@@ -115,6 +115,10 @@ satisfyLambda :: LispToken -> Maybe Bool
 satisfyLambda (Symbol s) = Just $ s == "lambda"
 satisfyLambda _ = Nothing
 
+satisfyIf :: LispToken -> Maybe Bool
+satisfyIf (Symbol s) = Just $ s == "if"
+satisfyIf _ = Nothing
+
 exprVar :: LispParser Expr
 exprVar = satisfyTok satisfySymbol
 
@@ -137,17 +141,28 @@ exprApp = do
   void $ satisfyTok satisfyRParen
   return $ ExprApp rator expressions
 
+exprIf :: ParsecT [LispToken] () Identity Expr
+exprIf = do
+  void $ satisfyTok satisfyLParen
+  void $ satisfyTok satisfyIf
+  test_exp <- exprExpr
+  true_exp <- exprExpr
+  false_exp <- exprExpr
+  void $ satisfyTok satisfyRParen
+  return $ ExprIf test_exp true_exp false_exp
+
 exprExpr :: ParsecT [LispToken] () Identity Expr
 exprExpr = do
   x <- try exprLambda
+    <|> try exprIf
     <|> try exprApp
     <|> try (satisfyTok satisfyNumeric)
     <|> satisfyTok satisfySymbol
   return x
 
 printExpr :: Expr -> Int -> T.Text
-printExpr (ExprLitNum x) indent = T.pack . show $ x
-printExpr (ExprVar x) indent = x
+printExpr (ExprLitNum x) _indent = T.pack . show $ x
+printExpr (ExprVar x) _indent = x
 printExpr (ExprLambda [Identifier i] e) indent = let
   x = T.pack "(lambda (" <> i <> ")"
   y = printExpr e (indent + 2)
@@ -162,10 +177,15 @@ printExpr (ExprApp rator rands) indent = let
     _ -> ""
   in
     T.pack "(" <> printExpr rator indent <> new_line <> rands''' <>  ")"
+printExpr (ExprIf test_exp true_exp false_exp) indent = let
+  test_exp' = printExpr test_exp (indent + 5)
+  true_exp' = printExpr true_exp (indent + 5)
+  false_exp' = printExpr false_exp (indent + 5)
+  indents = T.replicate (indent + 4) " "
+  in
+    T.pack "(if " <> test_exp' <> "\n" <> indents <> true_exp' <> "\n" <> indents <> false_exp' <> ")"
 
-printExpr x _ = error $ show $ "not implemented for " ++ show x
-
--- printExpr (ExprIf !Expr !Expr !Expr
+--printExpr x _ = error $ show $ "not implemented for " ++ show x
 
 parseExpr :: LispParser Expr
 parseExpr = exprExpr
@@ -174,3 +194,11 @@ lexAndParse :: String -> ParserResult
 lexAndParse s = case lexer s of
   Right toks -> parse parseExpr "" toks
   Left e -> error $ show e
+
+-- (if (a y)
+--     ((lambda (a)
+--        (x a))
+--       z)
+--     ((lambda (x)
+--        (c d))
+--       z))
