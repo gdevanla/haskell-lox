@@ -153,26 +153,26 @@ exprIf = do
 
 exprExpr :: ParsecT [LispToken] () Identity Expr
 exprExpr = do
-  x <- try exprLambda
+  try exprLambda
     <|> try exprIf
     <|> try exprApp
     <|> try (satisfyTok satisfyNumeric)
     <|> satisfyTok satisfySymbol
-  return x
 
 printExpr :: Expr -> Int -> T.Text
 printExpr (ExprLitNum x) _indent = T.pack . show $ x
 printExpr (ExprVar x) _indent = x
-printExpr (ExprLambda [Identifier i] e) indent = let
-  x = T.pack "(lambda (" <> i <> ")"
+printExpr (ExprLambda ids e) indent = let
+  ids' = T.intercalate " " $ L.map unIdent ids
+  x = T.pack "(lambda (" <> ids' <> ")"
   y = printExpr e (indent + 2)
   in
-    x <> "\n" <> (T.replicate (indent + 2) " ") <> y <> ")"
+    x <> "\n" <> T.replicate (indent + 2) " " <> y <> ")"
 printExpr (ExprApp rator rands) indent = let
-  rands' = (((flip printExpr) indent) <$> rands)
+  rands' = (flip printExpr indent <$> rands)
   rands'' = T.intercalate (T.pack " ") rands'
   rands''' = if L.null rands' then "" else " " <> rands''
-  new_line = case (rator) of
+  new_line = case rator of
     ExprLambda _ _ -> "\n" <> T.replicate indent " "
     _ -> ""
   in

@@ -26,6 +26,11 @@ test_exprs = [
   test_parser
     "((lambda (x) (a x)) 1)"
     (ExprApp (ExprLambda [Identifier "x"] (ExprApp (ExprVar "a") [ExprVar "x"])) [ExprLitNum 1]),
+
+  test_parser
+    "((lambda (x y z) (a x)) 1)"
+    (ExprApp (ExprLambda [Identifier "x", Identifier "y", Identifier "z"] (ExprApp (ExprVar "a") [ExprVar "x"])) [ExprLitNum 1]),
+
   test_parser "(if (a y) ((lambda (a) (x a)) z) ((lambda (x) (c d)) z))"
     (ExprIf (ExprApp (ExprVar "a") [ExprVar "y"])
             (ExprApp (ExprLambda [Identifier "a"] (ExprApp (ExprVar "x") [ExprVar "a"])) [ExprVar "z"])
@@ -36,7 +41,8 @@ test_prints = [
   test_print "a",
   test_print "(a y)",
   test_print "(lambda (x)\n  (a y))",
-  test_print "(if (a y)\n    ((lambda (a)\n       (x a))\n      z)\n    ((lambda (x)\n       (c d))\n      z))"
+  test_print "(if (a y)\n    ((lambda (a)\n       (x a))\n      z)\n    ((lambda (x)\n       (c d))\n      z))",
+  test_print "((lambda (x y z)\n  (a x))\n 1)"
   ]
 
 test_parsers = test_exprs ++ test_prints
