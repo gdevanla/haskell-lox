@@ -9,6 +9,7 @@ import Data.Char
 import Text.Parsec.Char as PC
 import Text.Parsec
 import Text.Parsec.String as PS
+import qualified Data.List as L
 
 data LispToken =
   LParen
@@ -141,9 +142,30 @@ exprExpr = do
   x <- try exprLambda
     <|> try exprApp
     <|> try (satisfyTok satisfyNumeric)
-    <|> (satisfyTok satisfySymbol)
+    <|> satisfyTok satisfySymbol
   return x
 
+printExpr :: Expr -> Int -> T.Text
+printExpr (ExprLitNum x) indent = T.pack . show $ x
+printExpr (ExprVar x) indent = x
+printExpr (ExprLambda [Identifier i] e) indent = let
+  x = T.pack "(lambda (" <> i <> ")"
+  y = printExpr e (indent + 2)
+  in
+    x <> "\n" <> (T.replicate (indent + 2) " ") <> y <> ")"
+printExpr (ExprApp rator rands) indent = let
+  rands' = (((flip printExpr) indent) <$> rands)
+  rands'' = T.intercalate (T.pack " ") rands'
+  rands''' = if L.null rands' then "" else " " <> rands''
+  new_line = case (rator) of
+    ExprLambda _ _ -> "\n" <> T.replicate indent " "
+    _ -> ""
+  in
+    T.pack "(" <> printExpr rator indent <> new_line <> rands''' <>  ")"
+
+printExpr x _ = error $ show $ "not implemented for " ++ show x
+
+-- printExpr (ExprIf !Expr !Expr !Expr
 
 parseExpr :: LispParser Expr
 parseExpr = exprExpr
