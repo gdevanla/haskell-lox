@@ -34,7 +34,8 @@ test_exprs = [
   test_parser "(if (a y) ((lambda (a) (x a)) z) ((lambda (x) (c d)) z))"
     (ExprIf (ExprApp (ExprVar "a") [ExprVar "y"])
             (ExprApp (ExprLambda [Identifier "a"] (ExprApp (ExprVar "x") [ExprVar "a"])) [ExprVar "z"])
-            (ExprApp (ExprLambda [Identifier "x"] (ExprApp (ExprVar "c") [ExprVar "d"])) [ExprVar "z"]))
+            (ExprApp (ExprLambda [Identifier "x"] (ExprApp (ExprVar "c") [ExprVar "d"])) [ExprVar "z"])),
+  test_parser "(+ a b)" $ ExprPrim PrimAdd [ExprVar "a", ExprVar "b"]
   ]
 
 test_prints = [

@@ -17,7 +17,9 @@ data LispToken =
   | Symbol T.Text
   | String T.Text
   | Numeric T.Text
-  | Comma
+  | Plus
+  | Mult
+  | Sub
   deriving (Eq, Show)
 
 -- data LispTokInfo = LispTokInfo LispToken SourcePos
@@ -40,6 +42,15 @@ scanSingleCharToken = choice $ build <$> charMapping
     build (x, y) = x <$ char y <* whitespace
 
 
+scanPrimitive :: Parser LispToken
+scanPrimitive = do
+  prim <- oneOf "+-*" <* whitespace
+  case prim of
+    '+' -> return Plus
+    '-' -> return Sub
+    '*' -> return Mult
+    _ -> error "Error incorrect parser set in scanPrimitive"
+
 scanSymbol :: Parser LispToken
 scanSymbol = do
   fc <- firstChar
@@ -55,7 +66,7 @@ scanNumeric = Numeric . T.pack <$> Text.Parsec.many1 digit <* whitespace
 
 
 lexTokens :: Parser LispToken
-lexTokens = try lParens <|> try rParens <|> try scanSymbol <|> scanNumeric
+lexTokens = try lParens <|> try rParens <|> try scanPrimitive <|> try scanSymbol <|> scanNumeric
   -- l <- lParens
   -- toks <- try scanSymbolL <|> try scanNumberL <|> try rParens <|> lexTokens
   -- return $ [l] ++ toks
@@ -78,6 +89,10 @@ data Expr
   | ExprLambda [Identifier] Expr
   | ExprApp Expr [Expr]
   | ExprIf !Expr !Expr !Expr
+  | ExprPrim !Primitive [Expr]
+  deriving (Eq, Show)
+
+data Primitive = PrimAdd | PrimSub | PrimMult
   deriving (Eq, Show)
 
 type ParserResult = Either ParseError Expr
@@ -90,7 +105,6 @@ satisfyTok f = tokenPrim showTok updateTokPos match
     updateTokPos pos _ _ = pos
     match t = f t
 
-
 satisfyLParen :: LispToken -> Maybe Bool
 satisfyLParen LParen = Just True
 satisfyLParen _ = Nothing
@@ -98,7 +112,6 @@ satisfyLParen _ = Nothing
 satisfyRParen :: LispToken -> Maybe Bool
 satisfyRParen RParen = Just True
 satisfyRParen _ = Nothing
-
 satisfySymbol :: LispToken -> Maybe Expr
 satisfySymbol (Symbol s) = Just $ ExprVar s
 satisfySymbol _ = Nothing
@@ -118,6 +131,12 @@ satisfyLambda _ = Nothing
 satisfyIf :: LispToken -> Maybe Bool
 satisfyIf (Symbol s) = Just $ s == "if"
 satisfyIf _ = Nothing
+
+satisfyPrimitive :: LispToken -> Maybe Primitive
+satisfyPrimitive Plus = Just PrimAdd
+satisfyPrimitive Sub = Just PrimSub
+satisfyPrimitive Mult = Just PrimMult
+satisfyPrimitive _ = Nothing
 
 exprVar :: LispParser Expr
 exprVar = satisfyTok satisfySymbol
@@ -141,6 +160,14 @@ exprApp = do
   void $ satisfyTok satisfyRParen
   return $ ExprApp rator expressions
 
+exprPrimitive :: ParsecT [LispToken] () Identity Expr
+exprPrimitive = do
+  void $ satisfyTok satisfyLParen
+  rator <- satisfyTok satisfyPrimitive
+  expressions <- many exprExpr
+  void $ satisfyTok satisfyRParen
+  return $ ExprPrim rator expressions
+
 exprIf :: ParsecT [LispToken] () Identity Expr
 exprIf = do
   void $ satisfyTok satisfyLParen
@@ -154,6 +181,7 @@ exprIf = do
 exprExpr :: ParsecT [LispToken] () Identity Expr
 exprExpr = do
   try exprLambda
+    <|> try exprPrimitive
     <|> try exprIf
     <|> try exprApp
     <|> try (satisfyTok satisfyNumeric)
