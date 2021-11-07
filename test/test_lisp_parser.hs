@@ -43,7 +43,8 @@ test_prints = [
   test_print "(a y)",
   test_print "(lambda (x)\n  (a y))",
   test_print "(if (a y)\n    ((lambda (a)\n       (x a))\n      z)\n    ((lambda (x)\n       (c d))\n      z))",
-  test_print "((lambda (x y z)\n  (a x))\n 1)"
+  test_print "((lambda (x y z)\n  (a x))\n 1)",
+  test_print "((lambda (x)\n  (+   a x f))\n 10)"
   ]
 
 test_parsers = test_exprs ++ test_prints

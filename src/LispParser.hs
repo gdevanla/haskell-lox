@@ -196,15 +196,24 @@ printExpr (ExprLambda ids e) indent = let
   y = printExpr e (indent + 2)
   in
     x <> "\n" <> T.replicate (indent + 2) " " <> y <> ")"
-printExpr (ExprApp rator rands) indent = let
-  rands' = (flip printExpr indent <$> rands)
-  rands'' = T.intercalate (T.pack " ") rands'
-  rands''' = if L.null rands' then "" else " " <> rands''
-  new_line = case rator of
-    ExprLambda _ _ -> "\n" <> T.replicate indent " "
-    _ -> ""
-  in
-    T.pack "(" <> printExpr rator indent <> new_line <> rands''' <>  ")"
+printExpr (ExprApp rator rands) indent =
+  let rands' = (flip printExpr indent <$> rands)
+      rands'' = T.intercalate (T.pack " ") rands'
+      rands''' = if L.null rands' then "" else " " <> rands''
+      new_line = case rator of
+        ExprLambda _ _ -> "\n" <> T.replicate indent " "
+        _ -> ""
+   in T.pack "(" <> printExpr rator indent <> new_line <> rands''' <> ")"
+printExpr (ExprPrim rator rands) indent =
+  let rands' = (flip printExpr indent <$> rands)
+      rands'' = T.intercalate (T.pack " ") rands'
+      rands''' = if L.null rands' then "" else " " <> rands''
+      new_line = T.replicate indent " "
+      op = case rator of
+        PrimAdd -> T.pack "+"
+        PrimSub -> T.pack "-"
+        PrimMult -> T.pack "*"
+   in T.pack "(" <> op <> new_line <> rands''' <> ")"
 printExpr (ExprIf test_exp true_exp false_exp) indent = let
   test_exp' = printExpr test_exp (indent + 5)
   true_exp' = printExpr true_exp (indent + 5)
