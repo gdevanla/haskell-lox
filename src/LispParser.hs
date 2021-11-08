@@ -298,28 +298,53 @@ unpackIdent x = lift . return $ x
 
 --{-# INLINE unpackIdent #-}
 
+isTruthy :: LispValue -> Bool
+isTruthy (LispInt x) = x > 0
+isTruthy _ = False
+
+
 interpretExpr :: Expr -> InterpreterTIO
 interpretExpr (ExprLitNum a) = return $ LispInt a
 interpretExpr (ExprVar var) = undefined
 interpretExpr (ExprLambda ids expr) = undefined
 interpretExpr (ExprApp exps [exprs]) = undefined
-interpretExpr (ExprIf test_exp true_exp false_exp) = undefined
+interpretExpr (ExprIf test_exp true_exp false_exp) = do
+  test <- interpretExpr test_exp
+  if isTruthy test then interpretExpr true_exp else interpretExpr false_exp
 interpretExpr (ExprPrim prim exprs) = do
   rands <- mapM interpretExpr exprs
   let rands' = traverse convert rands
   case rands' of
-    Right vals -> return $ LispInt $ applyPrim (func prim) vals
+    Right (x:xs) -> return $ LispInt $ applyPrim (func prim) x xs
+    Right _ -> ExceptT . return . Left $ SystemError $ T.pack "Not enough operands for " <> T.pack (show prim)
     Left e -> ExceptT . return . Left $ SystemError e
   where
     convert (LispInt a) = Right a
     convert x = Left $ T.pack "Invalid rand for primitive type: " <> T.pack (show x)
 
-    applyPrim :: (Int -> Int -> Int) -> [Int] -> Int
-    applyPrim func' vs = L.foldl' func' 0 vs
+    applyPrim :: (Int -> Int -> Int) -> Int -> [Int] -> Int
+    applyPrim func' i vs = L.foldl' func' i vs
 
     func PrimAdd = (+)
     func PrimSub = (-)
     func PrimMult = (*)
+
+-- interpretExpr (ExprPrim prim exprs) = do
+--   rands <- mapM interpretExpr exprs
+--   let rands' = traverse convert rands
+--   case rands' of
+--     Right vals -> return $ LispInt $ applyPrim (func prim) vals
+--     Left e -> ExceptT . return . Left $ SystemError e
+--   where
+--     convert (LispInt a) = Right a
+--     convert x = Left $ T.pack "Invalid rand for primitive type: " <> T.pack (show x)
+
+--     applyPrim :: (Int -> Int -> Int) -> [Int] -> Int
+--     applyPrim func' vs = L.foldl' func' 0 vs
+
+--     func PrimAdd = (+) 1
+--     func PrimSub = (-)
+--     func PrimMult = (*)
 
   -- case prim of
   --   PrimAdd -> applyPrim (+) rands

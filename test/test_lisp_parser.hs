@@ -44,7 +44,13 @@ lispInterpret input expected = testCase input $ do
   expected @=? result
 
 test_lisp_interpret = testGroup "test_list_interpret" [
-  lispInterpret "(+ 1 2)" (Right $ LispInt 3)
+  lispInterpret "(+ 1 2)" (Right $ LispInt 3),
+  lispInterpret "(+ 5 (+ 1 2))" (Right $ LispInt 8),
+  lispInterpret "(+ 5  3)" (Right $ LispInt 8),
+  lispInterpret "(+ (+ 5 1)  (+ 6 1) 6)" (Right $ LispInt 19),
+  lispInterpret "(+ (+ 5 10) (- 6 1) 6)" (Right $ LispInt 26),
+  lispInterpret "(if 0 (* 5 10) (+ 3 4))" (Right $ LispInt 7),
+  lispInterpret "(if 1 (* 5 10) (+ 3 4))" (Right $ LispInt 50)
   ]
 
 
