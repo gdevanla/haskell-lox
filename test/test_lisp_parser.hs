@@ -3,9 +3,8 @@
 import RIO
 import Test.Tasty
 import Test.Tasty.HUnit
-import LispParser
-import Text.Parsec as P
 import Data.Text as T
+import LispParser
 
 test_parser input expected = testCase input $ do
   let result = lexAndParse input
@@ -38,6 +37,17 @@ test_exprs = [
   test_parser "(+ a b)" $ ExprPrim PrimAdd [ExprVar "a", ExprVar "b"]
   ]
 
+
+lispInterpret input expected = testCase input $ do
+  result <- runInterpreter input
+  putStrLn $ show result
+  expected @=? result
+
+test_lisp_interpret = testGroup "test_list_interpret" [
+  lispInterpret "(+ 1 2)" (Right $ LispInt 3)
+  ]
+
+
 test_prints = [
   test_print "a",
   test_print "(a y)",
@@ -47,8 +57,10 @@ test_prints = [
   test_print "((lambda (x)\n  (+   a x f))\n 10)"
   ]
 
-test_parsers = test_exprs ++ test_prints
+test_lisp_parsers = testGroup "test_lisp_parsers" $ test_exprs ++ test_prints
+
+-- test_interpret = testGroup "test_lisp_interpret" $ test_lisp_interpreter
 
 main = do
-  defaultMain $ testGroup "test_lisp_parser" test_parsers
+  defaultMain $ testGroup "test_lisp" [test_lisp_parsers, test_lisp_interpret]
   --defaultMain tests
