@@ -1,22 +1,22 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 module LispParser where
 
-import Import hiding (many, (<|>), try)
-import Data.Text as T
+import Control.Monad.Except
+import Control.Monad.State.Strict
 import Data.Char
-import Text.Parsec.Char as PC
-import Text.Parsec
-import Text.Parsec.String as PS
 import qualified Data.List as L
 import Data.Map.Strict as M
-import Control.Monad.State.Strict
-import Control.Monad.Except
+import Data.Text as T
+import Import hiding (many, try, (<|>))
+import Text.Parsec
+import Text.Parsec.Char as PC
+import Text.Parsec.String as PS
 
-data LispToken =
-  LParen
+data LispToken
+  = LParen
   | RParen
   | Symbol T.Text
   | String T.Text
@@ -24,6 +24,14 @@ data LispToken =
   | Plus
   | Mult
   | Sub
+  | Lt
+  | Lte
+  | Gt
+  | Gte
+  | Eq
+  | And
+  | Or
+  | Not
   deriving (Eq, Show)
 
 -- data LispTokInfo = LispTokInfo LispToken SourcePos
@@ -45,6 +53,26 @@ scanSingleCharToken = choice $ build <$> charMapping
     build :: (LispToken, Char) -> Parser LispToken
     build (x, y) = x <$ char y <* whitespace
 
+scanPrimitiveMultiple :: Parser LispToken
+scanPrimitiveMultiple = do
+  prim <-
+    (try (string "and")
+      <|> try (string "or")
+      <|> try (string ">=")
+      <|> try (string "<=")
+      <|> try (string ">")
+      <|> try (string "<")
+      <|> string "=" ) <* whitespace
+  case prim of
+    "and" -> return And
+    "or" -> return Or
+    "not" -> return Not
+    ">=" -> return Gte
+    "<=" -> return Lte
+    ">" -> return Gt
+    "<" -> return Lt
+    "=" -> return Eq
+    _ -> error "Error incorrect parser set in scanPrimitive"
 
 scanPrimitive :: Parser LispToken
 scanPrimitive = do
@@ -68,23 +96,22 @@ scanSymbol = do
 scanNumeric :: Parser LispToken
 scanNumeric = Numeric . T.pack <$> Text.Parsec.many1 digit <* whitespace
 
-
 lexTokens :: Parser LispToken
-lexTokens = try lParens <|> try rParens <|> try scanPrimitive <|> try scanSymbol <|> scanNumeric
-  -- l <- lParens
-  -- toks <- try scanSymbolL <|> try scanNumberL <|> try rParens <|> lexTokens
-  -- return $ [l] ++ toks
+lexTokens = try lParens <|> try rParens <|> try scanPrimitiveMultiple <|> try scanPrimitive <|> try scanSymbol <|> scanNumeric
   where
+    -- l <- lParens
+    -- toks <- try scanSymbolL <|> try scanNumberL <|> try rParens <|> lexTokens
+    -- return $ [l] ++ toks
+
     lParens = LParen <$ satisfy (== '(') <* whitespace
     rParens = RParen <$ satisfy (== ')') <* whitespace
 
 lexer :: String -> Lexer
 lexer = parse (many lexTokens) ""
 
-
 -- Parser functions
 
-newtype Identifier = Identifier {unIdent:: T.Text}
+newtype Identifier = Identifier {unIdent :: T.Text}
   deriving (Eq, Show)
 
 data Expr
@@ -94,12 +121,27 @@ data Expr
   | ExprApp Expr [Expr]
   | ExprIf !Expr !Expr !Expr
   | ExprPrim !Primitive [Expr]
+  | ExprPrimPred !PrimitivePred Expr Expr
   deriving (Eq, Show)
 
-data Primitive = PrimAdd | PrimSub | PrimMult
+data Primitive
+  = PrimAdd
+  | PrimSub
+  | PrimMult
+  deriving (Eq, Show)
+
+data PrimitivePred
+  = PrimAnd
+  | PrimOr
+  | PrimEq
+  | PrimLt
+  | PrimLte
+  | PrimGt
+  | PrimGte
   deriving (Eq, Show)
 
 type ParserResult = Either ParseError Expr
+
 type LispParser a = ParsecT [LispToken] () Identity a
 
 satisfyTok :: (LispToken -> Maybe a) -> LispParser a
@@ -116,6 +158,7 @@ satisfyLParen _ = Nothing
 satisfyRParen :: LispToken -> Maybe Bool
 satisfyRParen RParen = Just True
 satisfyRParen _ = Nothing
+
 satisfySymbol :: LispToken -> Maybe Expr
 satisfySymbol (Symbol s) = Just $ ExprVar s
 satisfySymbol _ = Nothing
@@ -125,7 +168,7 @@ satisfyIdentifier (Symbol s) = Just $ Identifier s
 satisfyIdentifier _ = Nothing
 
 satisfyNumeric :: LispToken -> Maybe Expr
-satisfyNumeric (Numeric s) = ExprLitNum <$> (readMaybe (T.unpack s)::Maybe Int)
+satisfyNumeric (Numeric s) = ExprLitNum <$> (readMaybe (T.unpack s) :: Maybe Int)
 satisfyNumeric _ = Nothing
 
 satisfyLambda :: LispToken -> Maybe Bool
@@ -141,6 +184,17 @@ satisfyPrimitive Plus = Just PrimAdd
 satisfyPrimitive Sub = Just PrimSub
 satisfyPrimitive Mult = Just PrimMult
 satisfyPrimitive _ = Nothing
+
+satisfyPrimitivePredicate :: LispToken -> Maybe PrimitivePred
+satisfyPrimitivePredicate And = Just PrimAnd
+satisfyPrimitivePredicate Or = Just PrimOr
+--satisfyPrimitivePredicate Not = Just PrimNot
+satisfyPrimitivePredicate Lt = Just PrimLt
+satisfyPrimitivePredicate Lte = Just PrimLte
+satisfyPrimitivePredicate Gt = Just PrimGt
+satisfyPrimitivePredicate Gte = Just PrimGte
+satisfyPrimitivePredicate Eq = Just PrimEq
+satisfyPrimitivePredicate _ = Nothing
 
 exprVar :: LispParser Expr
 exprVar = satisfyTok satisfySymbol
@@ -172,6 +226,16 @@ exprPrimitive = do
   void $ satisfyTok satisfyRParen
   return $ ExprPrim rator expressions
 
+
+exprPrimitivePredicate :: ParsecT [LispToken] () Identity Expr
+exprPrimitivePredicate = do
+  void $ satisfyTok satisfyLParen
+  rator <- satisfyTok satisfyPrimitivePredicate
+  expr1 <- exprExpr
+  expr2 <- exprExpr
+  void $ satisfyTok satisfyRParen
+  return $ ExprPrimPred rator expr1 expr2
+
 exprIf :: ParsecT [LispToken] () Identity Expr
 exprIf = do
   void $ satisfyTok satisfyLParen
@@ -185,6 +249,7 @@ exprIf = do
 exprExpr :: ParsecT [LispToken] () Identity Expr
 exprExpr = do
   try exprLambda
+    <|> try exprPrimitivePredicate
     <|> try exprPrimitive
     <|> try exprIf
     <|> try exprApp
@@ -194,12 +259,11 @@ exprExpr = do
 printExpr :: Expr -> Int -> T.Text
 printExpr (ExprLitNum x) _indent = T.pack . show $ x
 printExpr (ExprVar x) _indent = x
-printExpr (ExprLambda ids e) indent = let
-  ids' = T.intercalate " " $ L.map unIdent ids
-  x = T.pack "(lambda (" <> ids' <> ")"
-  y = printExpr e (indent + 2)
-  in
-    x <> "\n" <> T.replicate (indent + 2) " " <> y <> ")"
+printExpr (ExprLambda ids e) indent =
+  let ids' = T.intercalate " " $ L.map unIdent ids
+      x = T.pack "(lambda (" <> ids' <> ")"
+      y = printExpr e (indent + 2)
+   in x <> "\n" <> T.replicate (indent + 2) " " <> y <> ")"
 printExpr (ExprApp rator rands) indent =
   let rands' = (flip printExpr indent <$> rands)
       rands'' = T.intercalate (T.pack " ") rands'
@@ -218,13 +282,25 @@ printExpr (ExprPrim rator rands) indent =
         PrimSub -> T.pack "-"
         PrimMult -> T.pack "*"
    in T.pack "(" <> op <> new_line <> rands''' <> ")"
-printExpr (ExprIf test_exp true_exp false_exp) indent = let
-  test_exp' = printExpr test_exp (indent + 5)
-  true_exp' = printExpr true_exp (indent + 5)
-  false_exp' = printExpr false_exp (indent + 5)
-  indents = T.replicate (indent + 4) " "
-  in
-    T.pack "(if " <> test_exp' <> "\n" <> indents <> true_exp' <> "\n" <> indents <> false_exp' <> ")"
+printExpr (ExprPrimPred rator expr1 expr2) indent =
+  let expr1' = printExpr expr1 indent
+      expr2' = printExpr expr2 indent
+      op = case rator of
+        PrimAnd -> T.pack "and"
+        PrimOr -> T.pack "or"
+        --PrimNot -> T.pack "not"
+        PrimLt -> T.pack "<"
+        PrimLte -> T.pack "<="
+        PrimGt -> T.pack ">"
+        PrimGte -> T.pack ">="
+        PrimEq -> T.pack "="
+   in T.pack "(" <> op <> " " <> expr1' <> " " <> expr2' <> ")"
+printExpr (ExprIf test_exp true_exp false_exp) indent =
+  let test_exp' = printExpr test_exp (indent + 5)
+      true_exp' = printExpr true_exp (indent + 5)
+      false_exp' = printExpr false_exp (indent + 5)
+      indents = T.replicate (indent + 4) " "
+   in T.pack "(if " <> test_exp' <> "\n" <> indents <> true_exp' <> "\n" <> indents <> false_exp' <> ")"
 
 --printExpr x _ = error $ show $ "not implemented for " ++ show x
 
@@ -238,53 +314,60 @@ lexAndParse s = case lexer s of
 
 -- Interpreter
 
-data LispValue = LispInt Int
+data LispValue
+  = LispInt Int
   | LispIdentifier T.Text
   deriving (Show, Eq)
 
-data Env = Env {
-               env :: !(M.Map T.Text LispValue),
-               parent :: !(Maybe Env)
-               } deriving (Show, Eq)
+data Env = Env
+  { env :: !(M.Map T.Text LispValue),
+    parent :: !(Maybe Env)
+  }
+  deriving (Show, Eq)
 
-data LispError = SystemError !T.Text
-  | ControlFlow !LispValue deriving (Show, Eq)
+data LispError
+  = SystemError !T.Text
+  | ControlFlow !LispValue
+  deriving (Show, Eq)
 
 type InterpreterTIO = ExceptT LispError (StateT Env IO) LispValue
 
 initEnv :: Maybe Env -> Env
-initEnv !parent = Env {env=M.empty, parent=parent}
+initEnv !parent = Env {env = M.empty, parent = parent}
+
 --{-# INLINE initEnv #-}
 
 lookupEnv :: T.Text -> Env -> Maybe LispValue
 lookupEnv !k !environ = go (Just environ)
   where
-    go (Just Env{..}) = case M.lookup k env of
-                           Just v -> Just $! v
-                           Nothing -> go parent
+    go (Just Env {..}) = case M.lookup k env of
+      Just v -> Just $! v
+      Nothing -> go parent
     go Nothing = Nothing
+
 --{-# INLINE lookupEnv #-}
 
 updateEnv :: T.Text -> LispValue -> Env -> Maybe Env
 updateEnv !k !v !s = go (Just $! s)
   where
-    go (Just s'@Env{..}) = case M.lookup k env of
-      Just _ -> Just s'{env=M.update (\_ -> Just v) k env}
+    go (Just s'@Env {..}) = case M.lookup k env of
+      Just _ -> Just s' {env = M.update (\_ -> Just v) k env}
       Nothing -> do
         !parent_state <- go parent
-        return $ s'{parent=Just parent_state}
+        return $ s' {parent = Just parent_state}
     go Nothing = Nothing
 
 insertEnv :: T.Text -> LispValue -> Env -> Env
 insertEnv !k !v s@Env {..} = s {env = M.insert k v env}
+
 --{-# INLINE insertEnv #-}
 
 multiInsertEnv :: [(T.Text, LispValue)] -> Env -> Env
-multiInsertEnv !values s@Env {..} = let
-  new_env = M.fromList values
-  !new_env' = M.union new_env env
-  in
-  s {env=new_env'}
+multiInsertEnv !values s@Env {..} =
+  let new_env = M.fromList values
+      !new_env' = M.union new_env env
+   in s {env = new_env'}
+
 -- {-# INLINE multiInsertEnv #-}
 
 unpackIdent :: LispValue -> InterpreterTIO
@@ -302,7 +385,6 @@ isTruthy :: LispValue -> Bool
 isTruthy (LispInt x) = x > 0
 isTruthy _ = False
 
-
 interpretExpr :: Expr -> InterpreterTIO
 interpretExpr (ExprLitNum a) = return $ LispInt a
 interpretExpr (ExprVar var) = undefined
@@ -315,7 +397,7 @@ interpretExpr (ExprPrim prim exprs) = do
   rands <- mapM interpretExpr exprs
   let rands' = traverse convert rands
   case rands' of
-    Right (x:xs) -> return $ LispInt $ applyPrim (func prim) x xs
+    Right (x : xs) -> return $ LispInt $ applyPrim (func prim) x xs
     Right _ -> ExceptT . return . Left $ SystemError $ T.pack "Not enough operands for " <> T.pack (show prim)
     Left e -> ExceptT . return . Left $ SystemError e
   where
@@ -329,33 +411,31 @@ interpretExpr (ExprPrim prim exprs) = do
     func PrimSub = (-)
     func PrimMult = (*)
 
--- interpretExpr (ExprPrim prim exprs) = do
---   rands <- mapM interpretExpr exprs
---   let rands' = traverse convert rands
---   case rands' of
---     Right vals -> return $ LispInt $ applyPrim (func prim) vals
---     Left e -> ExceptT . return . Left $ SystemError e
---   where
---     convert (LispInt a) = Right a
---     convert x = Left $ T.pack "Invalid rand for primitive type: " <> T.pack (show x)
+-- interpretExpr (ExprPrimPred PrimNot [expr]) = do
+--   result <- interpretExpr expr
+--   if not (isTruthy result) then return (LispInt 1) else return (LispInt 0)
+-- interpretExpr (ExprPrimPred PrimNot _) = ExceptT . return . Left $ SystemError "Operand need for `not`"
 
---     applyPrim :: (Int -> Int -> Int) -> [Int] -> Int
---     applyPrim func' vs = L.foldl' func' 0 vs
+interpretExpr (ExprPrimPred PrimAnd expr1 expr2) = do
+  result <- interpretExpr expr1
+  if isTruthy result then do
+    result2 <- interpretExpr expr2
+    if isTruthy result2 then return (LispInt 1) else return (LispInt 0)
+    else return (LispInt 0)
 
---     func PrimAdd = (+) 1
---     func PrimSub = (-)
---     func PrimMult = (*)
+interpretExpr (ExprPrimPred PrimOr expr1 expr2) = do
+  result <- interpretExpr expr1
+  if isTruthy result then return (LispInt 1) else do
+    result2 <- interpretExpr expr2
+    if isTruthy result2 then return (LispInt 1) else return (LispInt 0)
 
-  -- case prim of
-  --   PrimAdd -> applyPrim (+) rands
-  -- where
-  --   applyPrim' :: Num a=> (a -> a -> a) -> [LispValue] -> [LispValue]
-  --   applyPrim' func vals = return $ LispInt $ L.foldl' (step func) (LispValue 0) vals
+interpretExpr (ExprPrimPred PrimLt expr1 expr2) = do
+  result1 <- interpretExpr expr1
+  result2 <- interpretExpr expr2
+  case (result1, result2) of
+    (LispInt x, LispInt y) -> if x > y then return (LispInt 1) else return (LispInt 0)
+    _ -> ExceptT . return . Left $ SystemError $ T.pack "Unsupported comparision for " <> T.pack (show result1) <>  " and "  <> T.pack (show result2)
 
-  --   step :: (Int->Int->Int) -> LispValue -> LispValue -> LispValue
-  --   step func acc rand = case (acc, rand) of
-  --     (LispInt acc', LispInt rand') -> LispInt $ func acc' rand'
-  --     _ -> Left "Invalid type for primtivies"
 
 
 runInterpreter :: String -> IO (Either LispError LispValue)

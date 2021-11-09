@@ -34,7 +34,16 @@ test_exprs = [
     (ExprIf (ExprApp (ExprVar "a") [ExprVar "y"])
             (ExprApp (ExprLambda [Identifier "a"] (ExprApp (ExprVar "x") [ExprVar "a"])) [ExprVar "z"])
             (ExprApp (ExprLambda [Identifier "x"] (ExprApp (ExprVar "c") [ExprVar "d"])) [ExprVar "z"])),
-  test_parser "(+ a b)" $ ExprPrim PrimAdd [ExprVar "a", ExprVar "b"]
+  test_parser "(+ a b)" $ ExprPrim PrimAdd [ExprVar "a", ExprVar "b"],
+
+  test_parser "(> a b)" $ ExprPrimPred PrimGt (ExprVar "a") (ExprVar "b"),
+  test_parser "(< a b)" $ ExprPrimPred PrimLt (ExprVar "a") (ExprVar "b"),
+  test_parser "(<= a b)" $ ExprPrimPred PrimLte (ExprVar "a") (ExprVar "b"),
+  test_parser "(>= a b)" $ ExprPrimPred PrimGte (ExprVar "a") (ExprVar "b"),
+  test_parser "(= a b)" $ ExprPrimPred PrimEq (ExprVar "a") (ExprVar "b"),
+  test_parser "(= a b)" $ ExprPrimPred PrimEq  (ExprVar "a") (ExprVar "b"),
+
+  test_parser "(and a b)" $ ExprPrimPred PrimAnd (ExprVar "a") (ExprVar "b")
   ]
 
 
@@ -50,7 +59,7 @@ test_lisp_interpret = testGroup "test_list_interpret" [
   lispInterpret "(+ (+ 5 1)  (+ 6 1) 6)" (Right $ LispInt 19),
   lispInterpret "(+ (+ 5 10) (- 6 1) 6)" (Right $ LispInt 26),
   lispInterpret "(if 0 (* 5 10) (+ 3 4))" (Right $ LispInt 7),
-  lispInterpret "(if 1 (* 5 10) (+ 3 4))" (Right $ LispInt 50)
+  lispInterpret "(if (- 5 1) (* 5 10) (+ 3 4))" (Right $ LispInt 50)
   ]
 
 
@@ -60,7 +69,10 @@ test_prints = [
   test_print "(lambda (x)\n  (a y))",
   test_print "(if (a y)\n    ((lambda (a)\n       (x a))\n      z)\n    ((lambda (x)\n       (c d))\n      z))",
   test_print "((lambda (x y z)\n  (a x))\n 1)",
-  test_print "((lambda (x)\n  (+   a x f))\n 10)"
+  test_print "((lambda (x)\n  (+   a x f))\n 10)",
+  test_print "(<= a b)",
+  test_print "(or a b)",
+  test_print "(or (lambda (x)\n  (if y\n      z\n      z)) (lambda (x y)\n  (+   1 2)))"
   ]
 
 test_lisp_parsers = testGroup "test_lisp_parsers" $ test_exprs ++ test_prints
