@@ -40,10 +40,13 @@ test_exprs = [
   test_parser "(< a b)" $ ExprPrimPred PrimLt (ExprVar "a") (ExprVar "b"),
   test_parser "(<= a b)" $ ExprPrimPred PrimLte (ExprVar "a") (ExprVar "b"),
   test_parser "(>= a b)" $ ExprPrimPred PrimGte (ExprVar "a") (ExprVar "b"),
-  test_parser "(= a b)" $ ExprPrimPred PrimEq (ExprVar "a") (ExprVar "b"),
-  test_parser "(= a b)" $ ExprPrimPred PrimEq  (ExprVar "a") (ExprVar "b"),
+  test_parser "(== a b)" $ ExprPrimPred PrimEq (ExprVar "a") (ExprVar "b"),
+  test_parser "(== a b)" $ ExprPrimPred PrimEq  (ExprVar "a") (ExprVar "b"),
 
-  test_parser "(and a b)" $ ExprPrimPred PrimAnd (ExprVar "a") (ExprVar "b")
+  test_parser "(and a b)" $ ExprPrimPred PrimAnd (ExprVar "a") (ExprVar "b"),
+
+  test_parser  "let a = 10 in let z = 10 in z * a" $ (ExprLet (Identifier {unIdent = "a"},ExprLitNum 10) (ExprLet (Identifier {unIdent = "z"},ExprLitNum 10) (ExprVar "z")))
+
   ]
 
 
@@ -59,7 +62,16 @@ test_lisp_interpret = testGroup "test_list_interpret" [
   lispInterpret "(+ (+ 5 1)  (+ 6 1) 6)" (Right $ LispInt 19),
   lispInterpret "(+ (+ 5 10) (- 6 1) 6)" (Right $ LispInt 26),
   lispInterpret "(if 0 (* 5 10) (+ 3 4))" (Right $ LispInt 7),
-  lispInterpret "(if (- 5 1) (* 5 10) (+ 3 4))" (Right $ LispInt 50)
+  lispInterpret "(if (- 5 1) (* 5 10) (+ 3 4))" (Right $ LispInt 50),
+
+  lispInterpret "let a = 10 in let b=100 in (* a b)" $ Right (LispInt 1000),
+  lispInterpret "let a = 10 in let b=(* a 2) in (* a b)" $ Right (LispInt 200),
+
+  -- test shadowing
+  lispInterpret "let a = 10 in let a=(* a 2) in a" $ Right (LispInt 20),
+
+  lispInterpret "let c = 10 in let a = 20 in let z = (lambda (x y) (* x y)) in (z c a)" $ Right (LispInt 200),
+  lispInterpret "let c = 10 in let a = 20 in let z = (lambda (x y) (* x y)) in (z (z c a) (z c a))" $ Right (LispInt 40000)
   ]
 
 
@@ -73,6 +85,8 @@ test_prints = [
   test_print "(<= a b)",
   test_print "(or a b)",
   test_print "(or (lambda (x)\n  (if y\n      z\n      z)) (lambda (x y)\n  (+   1 2)))"
+
+
   ]
 
 test_lisp_parsers = testGroup "test_lisp_parsers" $ test_exprs ++ test_prints

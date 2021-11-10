@@ -14,6 +14,7 @@ import Import hiding (many, try, (<|>))
 import Text.Parsec
 import Text.Parsec.Char as PC
 import Text.Parsec.String as PS
+import System.IO
 
 data LispToken
   = LParen
@@ -32,6 +33,9 @@ data LispToken
   | And
   | Or
   | Not
+  | Let
+  | Equal
+  | In
   deriving (Eq, Show)
 
 -- data LispTokInfo = LispTokInfo LispToken SourcePos
@@ -43,8 +47,9 @@ whitespace = void $ many $ oneOf " \n\t"
 
 charMapping :: [(LispToken, Char)]
 charMapping =
-  [ (LParen, '('),
-    (RParen, ')')
+  [ --(LParen, '('),
+    --(RParen, ')'),
+    (Equal, '=')
   ]
 
 scanSingleCharToken :: Parser LispToken
@@ -56,13 +61,15 @@ scanSingleCharToken = choice $ build <$> charMapping
 scanPrimitiveMultiple :: Parser LispToken
 scanPrimitiveMultiple = do
   prim <-
-    (try (string "and")
-      <|> try (string "or")
-      <|> try (string ">=")
-      <|> try (string "<=")
-      <|> try (string ">")
-      <|> try (string "<")
-      <|> string "=" ) <* whitespace
+    ( try (string "and")
+        <|> try (string "or")
+        <|> try (string ">=")
+        <|> try (string "<=")
+        <|> try (string ">")
+        <|> try (string "<")
+        <|> string "=="
+      )
+      <* whitespace
   case prim of
     "and" -> return And
     "or" -> return Or
@@ -71,7 +78,7 @@ scanPrimitiveMultiple = do
     "<=" -> return Lte
     ">" -> return Gt
     "<" -> return Lt
-    "=" -> return Eq
+    "==" -> return Eq
     _ -> error "Error incorrect parser set in scanPrimitive"
 
 scanPrimitive :: Parser LispToken
@@ -82,6 +89,10 @@ scanPrimitive = do
     '-' -> return Sub
     '*' -> return Mult
     _ -> error "Error incorrect parser set in scanPrimitive"
+
+scanKeywords :: Parser LispToken
+scanKeywords = try ((return Let) <* (string "let" <* whitespace)) <|>
+               ((return In) <* (string "in" <* whitespace))
 
 scanSymbol :: Parser LispToken
 scanSymbol = do
@@ -97,7 +108,8 @@ scanNumeric :: Parser LispToken
 scanNumeric = Numeric . T.pack <$> Text.Parsec.many1 digit <* whitespace
 
 lexTokens :: Parser LispToken
-lexTokens = try lParens <|> try rParens <|> try scanPrimitiveMultiple <|> try scanPrimitive <|> try scanSymbol <|> scanNumeric
+lexTokens = try lParens <|> try rParens <|> try scanPrimitiveMultiple <|> try scanPrimitive <|>
+  try scanSingleCharToken <|> try scanKeywords <|> try scanSymbol <|> scanNumeric
   where
     -- l <- lParens
     -- toks <- try scanSymbolL <|> try scanNumberL <|> try rParens <|> lexTokens
@@ -122,6 +134,7 @@ data Expr
   | ExprIf !Expr !Expr !Expr
   | ExprPrim !Primitive [Expr]
   | ExprPrimPred !PrimitivePred Expr Expr
+  | ExprLet (Identifier, Expr) Expr
   deriving (Eq, Show)
 
 data Primitive
@@ -172,11 +185,11 @@ satisfyNumeric (Numeric s) = ExprLitNum <$> (readMaybe (T.unpack s) :: Maybe Int
 satisfyNumeric _ = Nothing
 
 satisfyLambda :: LispToken -> Maybe Bool
-satisfyLambda (Symbol s) = Just $ s == "lambda"
+satisfyLambda (Symbol s) = if s == "lambda" then Just True else Nothing
 satisfyLambda _ = Nothing
 
 satisfyIf :: LispToken -> Maybe Bool
-satisfyIf (Symbol s) = Just $ s == "if"
+satisfyIf (Symbol s) = if s == "if" then Just True else Nothing
 satisfyIf _ = Nothing
 
 satisfyPrimitive :: LispToken -> Maybe Primitive
@@ -196,6 +209,18 @@ satisfyPrimitivePredicate Gte = Just PrimGte
 satisfyPrimitivePredicate Eq = Just PrimEq
 satisfyPrimitivePredicate _ = Nothing
 
+satisfyLet :: LispToken -> Maybe Bool
+satisfyLet Let = Just True
+satisfyLet _ = Nothing
+
+satisfyIn :: LispToken -> Maybe Bool
+satisfyIn In = Just True
+satisfyIn _ = Nothing
+
+satisfyEqual :: LispToken -> Maybe Bool
+satisfyEqual Equal = Just True
+satisfyEqual _ = Nothing
+
 exprVar :: LispParser Expr
 exprVar = satisfyTok satisfySymbol
 
@@ -214,7 +239,7 @@ exprApp :: ParsecT [LispToken] () Identity Expr
 exprApp = do
   void $ satisfyTok satisfyLParen
   rator <- exprExpr
-  expressions <- many exprExpr
+  expressions <- many1 exprExpr
   void $ satisfyTok satisfyRParen
   return $ ExprApp rator expressions
 
@@ -225,7 +250,6 @@ exprPrimitive = do
   expressions <- many exprExpr
   void $ satisfyTok satisfyRParen
   return $ ExprPrim rator expressions
-
 
 exprPrimitivePredicate :: ParsecT [LispToken] () Identity Expr
 exprPrimitivePredicate = do
@@ -246,9 +270,29 @@ exprIf = do
   void $ satisfyTok satisfyRParen
   return $ ExprIf test_exp true_exp false_exp
 
+
+exprLetBinding :: ParsecT [LispToken] () Identity (Identifier, Expr)
+exprLetBinding = do
+  symbol <- satisfyTok satisfyIdentifier
+  void $ satisfyTok satisfyEqual
+  expr <- exprExpr
+  return (symbol, expr)
+
+exprLetBindings :: ParsecT [LispToken] () Identity (Identifier, Expr)
+exprLetBindings = exprLetBinding
+
+exprLet :: ParsecT [LispToken] () Identity Expr
+exprLet = do
+  void $ satisfyTok satisfyLet
+  bindings <- exprLetBindings
+  void $ satisfyTok satisfyIn
+  expr <- exprExpr
+  return $ ExprLet bindings expr
+
 exprExpr :: ParsecT [LispToken] () Identity Expr
 exprExpr = do
-  try exprLambda
+  try exprLet
+    <|> try exprLambda
     <|> try exprPrimitivePredicate
     <|> try exprPrimitive
     <|> try exprIf
@@ -293,7 +337,7 @@ printExpr (ExprPrimPred rator expr1 expr2) indent =
         PrimLte -> T.pack "<="
         PrimGt -> T.pack ">"
         PrimGte -> T.pack ">="
-        PrimEq -> T.pack "="
+        PrimEq -> T.pack "=="
    in T.pack "(" <> op <> " " <> expr1' <> " " <> expr2' <> ")"
 printExpr (ExprIf test_exp true_exp false_exp) indent =
   let test_exp' = printExpr test_exp (indent + 5)
@@ -301,6 +345,11 @@ printExpr (ExprIf test_exp true_exp false_exp) indent =
       false_exp' = printExpr false_exp (indent + 5)
       indents = T.replicate (indent + 4) " "
    in T.pack "(if " <> test_exp' <> "\n" <> indents <> true_exp' <> "\n" <> indents <> false_exp' <> ")"
+printExpr (ExprLet (Identifier var, var_expr) expr) indent = let
+  var_expr' = printExpr var_expr indent
+  expr' = printExpr expr (indent + 2)
+  in
+    T.pack "let " <> var <> " = " <> var_expr' <> " in \n" <> T.replicate (indent + 2) " " <> expr'
 
 --printExpr x _ = error $ show $ "not implemented for " ++ show x
 
@@ -317,6 +366,7 @@ lexAndParse s = case lexer s of
 data LispValue
   = LispInt Int
   | LispIdentifier T.Text
+  | LispClosure [Identifier] !Expr !Env
   deriving (Show, Eq)
 
 data Env = Env
@@ -387,9 +437,28 @@ isTruthy _ = False
 
 interpretExpr :: Expr -> InterpreterTIO
 interpretExpr (ExprLitNum a) = return $ LispInt a
-interpretExpr (ExprVar var) = undefined
-interpretExpr (ExprLambda ids expr) = undefined
-interpretExpr (ExprApp exps [exprs]) = undefined
+interpretExpr (ExprVar var) = do
+  env <- get
+  case lookupEnv var env of
+    Just v -> return v
+    Nothing -> ExceptT . return . Left $ SystemError $ "undefined var:" <> var
+interpretExpr (ExprLambda ids expr) = LispClosure ids expr <$> get
+interpretExpr (ExprApp exp exprs) = do
+  orig_env <- get
+  func <- interpretExpr exp
+  liftIO $ putStrLn $ "calling "  ++ show func
+  liftIO $ putStrLn $ show exprs
+  case func of
+    LispClosure ids expr closure -> do
+      args <- mapM interpretExpr exprs
+      let !pa = L.zip (L.map unIdent ids) args
+      let !s = multiInsertEnv pa (initEnv (Just closure))
+      put $! s
+      value <- interpretExpr expr
+      put $! orig_env
+      return $! value
+    e -> ExceptT . return . Left $ SystemError $ T.pack "expecting callable: Got" <> T.pack (show e)
+
 interpretExpr (ExprIf test_exp true_exp false_exp) = do
   test <- interpretExpr test_exp
   if isTruthy test then interpretExpr true_exp else interpretExpr false_exp
@@ -418,25 +487,51 @@ interpretExpr (ExprPrim prim exprs) = do
 
 interpretExpr (ExprPrimPred PrimAnd expr1 expr2) = do
   result <- interpretExpr expr1
-  if isTruthy result then do
-    result2 <- interpretExpr expr2
-    if isTruthy result2 then return (LispInt 1) else return (LispInt 0)
+  if isTruthy result
+    then do
+      result2 <- interpretExpr expr2
+      if isTruthy result2 then return (LispInt 1) else return (LispInt 0)
     else return (LispInt 0)
-
 interpretExpr (ExprPrimPred PrimOr expr1 expr2) = do
   result <- interpretExpr expr1
-  if isTruthy result then return (LispInt 1) else do
-    result2 <- interpretExpr expr2
-    if isTruthy result2 then return (LispInt 1) else return (LispInt 0)
-
+  if isTruthy result
+    then return (LispInt 1)
+    else do
+      result2 <- interpretExpr expr2
+      if isTruthy result2 then return (LispInt 1) else return (LispInt 0)
 interpretExpr (ExprPrimPred PrimLt expr1 expr2) = do
   result1 <- interpretExpr expr1
   result2 <- interpretExpr expr2
-  case (result1, result2) of
-    (LispInt x, LispInt y) -> if x > y then return (LispInt 1) else return (LispInt 0)
-    _ -> ExceptT . return . Left $ SystemError $ T.pack "Unsupported comparision for " <> T.pack (show result1) <>  " and "  <> T.pack (show result2)
+  interpretCmp result1 result2 (<)
+interpretExpr (ExprPrimPred PrimGt expr1 expr2) = do
+  result1 <- interpretExpr expr1
+  result2 <- interpretExpr expr2
+  interpretCmp result1 result2 (>)
+interpretExpr (ExprPrimPred PrimLte expr1 expr2) = do
+  result1 <- interpretExpr expr1
+  result2 <- interpretExpr expr2
+  interpretCmp result1 result2 (<=)
+interpretExpr (ExprPrimPred PrimGte expr1 expr2) = do
+  result1 <- interpretExpr expr1
+  result2 <- interpretExpr expr2
+  interpretCmp result1 result2 (>=)
+interpretExpr (ExprPrimPred PrimEq expr1 expr2) = do
+  result1 <- interpretExpr expr1
+  result2 <- interpretExpr expr2
+  interpretCmp result1 result2 (==)
+interpretExpr (ExprLet (Identifier x, var_expr) expr) = do
+  var_expr' <- interpretExpr var_expr
+  s <- get
+  let env' = initEnv (Just s)
+  put $ insertEnv x var_expr' env'
+  interpretExpr expr
 
 
+interpretCmp :: LispValue -> LispValue -> (Int -> Int -> Bool) -> InterpreterTIO
+interpretCmp (LispInt x) (LispInt y) op = if x `op` y then return (LispInt 1) else return (LispInt 0)
+interpretCmp result1 result2 _ =
+  ExceptT . return . Left $
+    SystemError $ T.pack "Unsupported comparision for " <> T.pack (show result1) <> " and " <> T.pack (show result2)
 
 runInterpreter :: String -> IO (Either LispError LispValue)
 runInterpreter input = do
