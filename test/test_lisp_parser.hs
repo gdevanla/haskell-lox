@@ -45,9 +45,11 @@ test_exprs = [
   test_parser "(== a b)" $ ExprPrimPred PrimEq (ExprVar "a") (ExprVar "b"),
   test_parser "(== a b)" $ ExprPrimPred PrimEq  (ExprVar "a") (ExprVar "b"),
 
-  test_parser "(and a b)" $ ExprPrimPred PrimAnd (ExprVar "a") (ExprVar "b"),
+  test_parser "(&& a b)" $ ExprPrimPred PrimAnd (ExprVar "a") (ExprVar "b"),
 
-  test_parser  "let a = 10 in let z = 10 in z * a" $ ExprLet (Identifier {unIdent = "a"},ExprLitNum 10) (ExprLet (Identifier {unIdent = "z"},ExprLitNum 10) (ExprVar "z"))
+  test_parser  "let a = 10 in let z = 10 in z * a" $ ExprLet (Identifier {unIdent = "a"},ExprLitNum 10) (ExprLet (Identifier {unIdent = "z"},ExprLitNum 10) (ExprVar "z")),
+
+  test_parser "letrec f = (lambda (x) x) and g = (lambda (y) y) in (+ 2 3)" $ ExprLetRec [(Identifier {unIdent = "f"}, ExprLambda [Identifier {unIdent = "x"}] (ExprVar "x")), (Identifier {unIdent = "g"}, ExprLambda [Identifier {unIdent = "y"}] (ExprVar "y"))] (ExprPrim PrimAdd [ExprLitNum 2, ExprLitNum 3])
 
   ]
 
@@ -102,7 +104,7 @@ test_prog3 =
             let times4 = (lambda (x) (makemult makemult x)) in
                 (times4 5)
           |]
-   in lispInterpret source (Right (LispInt 20))
+   in lispInterpret source (Right (LispInt 120))
 
 test_prints = [
   test_print "a",
@@ -112,8 +114,8 @@ test_prints = [
   test_print "((lambda (x y z)\n  (a x))\n 1)",
   test_print "((lambda (x)\n  (+   a x f))\n 10)",
   test_print "(<= a b)",
-  test_print "(or a b)",
-  test_print "(or (lambda (x)\n  (if y\n      z\n      z)) (lambda (x y)\n  (+   1 2)))"
+  test_print "(&& a b)",
+  test_print "(|| (lambda (x)\n  (if y\n      z\n      z)) (lambda (x y)\n  (+   1 2)))"
   ]
 
 test_lisp_parsers = testGroup "test_lisp_parsers" $ test_exprs ++ test_prints ++ [test_prog1, test_prog2, test_prog3]

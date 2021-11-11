@@ -36,6 +36,8 @@ data LispToken
   | Let
   | Equal
   | In
+  | LetRecAnd
+  | LetRec
   deriving (Eq, Show)
 
 -- data LispTokInfo = LispTokInfo LispToken SourcePos
@@ -61,8 +63,8 @@ scanSingleCharToken = choice $ build <$> charMapping
 scanPrimitiveMultiple :: Parser LispToken
 scanPrimitiveMultiple = do
   prim <-
-    ( try (string "and")
-        <|> try (string "or")
+    ( try (string "&&")
+        <|> try (string "||")
         <|> try (string ">=")
         <|> try (string "<=")
         <|> try (string ">")
@@ -71,8 +73,8 @@ scanPrimitiveMultiple = do
       )
       <* whitespace
   case prim of
-    "and" -> return And
-    "or" -> return Or
+    "&&" -> return And
+    "||" -> return Or
     "not" -> return Not
     ">=" -> return Gte
     "<=" -> return Lte
@@ -91,8 +93,10 @@ scanPrimitive = do
     _ -> error "Error incorrect parser set in scanPrimitive"
 
 scanKeywords :: Parser LispToken
-scanKeywords = try ((return Let) <* (string "let" <* whitespace)) <|>
-               ((return In) <* (string "in" <* whitespace))
+scanKeywords =  try ((return LetRec) <* (string "letrec" <* whitespace)) <|>
+                try ((return Let) <* (string "let" <* whitespace)) <|>
+                try ((return In) <* (string "in" <* whitespace)) <|>
+                ((return LetRecAnd) <* (string "and" <* whitespace))
 
 scanSymbol :: Parser LispToken
 scanSymbol = do
@@ -135,6 +139,7 @@ data Expr
   | ExprPrim !Primitive [Expr]
   | ExprPrimPred !PrimitivePred Expr Expr
   | ExprLet (Identifier, Expr) Expr
+  | ExprLetRec [(Identifier, Expr)] Expr
   deriving (Eq, Show)
 
 data Primitive
@@ -213,6 +218,10 @@ satisfyLet :: LispToken -> Maybe Bool
 satisfyLet Let = Just True
 satisfyLet _ = Nothing
 
+satisfyLetRec :: LispToken -> Maybe Bool
+satisfyLetRec LetRec = Just True
+satisfyLetRec _ = Nothing
+
 satisfyIn :: LispToken -> Maybe Bool
 satisfyIn In = Just True
 satisfyIn _ = Nothing
@@ -220,6 +229,10 @@ satisfyIn _ = Nothing
 satisfyEqual :: LispToken -> Maybe Bool
 satisfyEqual Equal = Just True
 satisfyEqual _ = Nothing
+
+satisfyLetRecAnd :: LispToken -> Maybe Bool
+satisfyLetRecAnd LetRecAnd = Just True
+satisfyLetRecAnd _ = Nothing
 
 exprVar :: LispParser Expr
 exprVar = satisfyTok satisfySymbol
@@ -281,6 +294,9 @@ exprLetBinding = do
 exprLetBindings :: ParsecT [LispToken] () Identity (Identifier, Expr)
 exprLetBindings = exprLetBinding
 
+exprLetRecBindings :: ParsecT [LispToken] () Identity [(Identifier, Expr)]
+exprLetRecBindings = sepBy exprLetBinding (satisfyTok satisfyLetRecAnd)
+
 exprLet :: ParsecT [LispToken] () Identity Expr
 exprLet = do
   void $ satisfyTok satisfyLet
@@ -289,9 +305,18 @@ exprLet = do
   expr <- exprExpr
   return $ ExprLet bindings expr
 
+exprLetRec :: ParsecT [LispToken] () Identity Expr
+exprLetRec = do
+  void $ satisfyTok satisfyLetRec
+  bindings <- exprLetRecBindings
+  void $ satisfyTok satisfyIn
+  expr <- exprExpr
+  return $ ExprLetRec bindings expr
+
 exprExpr :: ParsecT [LispToken] () Identity Expr
 exprExpr = do
   try exprLet
+    <|> try exprLetRec
     <|> try exprLambda
     <|> try exprPrimitivePredicate
     <|> try exprPrimitive
@@ -330,8 +355,8 @@ printExpr (ExprPrimPred rator expr1 expr2) indent =
   let expr1' = printExpr expr1 indent
       expr2' = printExpr expr2 indent
       op = case rator of
-        PrimAnd -> T.pack "and"
-        PrimOr -> T.pack "or"
+        PrimAnd -> T.pack "&&"
+        PrimOr -> T.pack "||"
         --PrimNot -> T.pack "not"
         PrimLt -> T.pack "<"
         PrimLte -> T.pack "<="
