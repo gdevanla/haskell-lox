@@ -391,13 +391,19 @@ lexAndParse s = case lexer s of
 data LispValue
   = LispInt Int
   | LispIdentifier T.Text
-  | LispClosure [Identifier] !Expr !Env
+  | LispClosure [Identifier] !Expr !AllEnv
   deriving (Show, Eq)
 
 data Env = Env
   { env :: !(M.Map T.Text LispValue),
-    parent :: !(Maybe Env)
+    parent :: !(Maybe AllEnv)
   }
+  deriving (Show, Eq)
+
+data ClosureEnv = ClosureEnv (M.Map T.Text Expr) AllEnv
+  deriving (Show, Eq)--AllEnv here is the parent
+
+data AllEnv = SimpleEnv Env | RecEnv ClosureEnv
   deriving (Show, Eq)
 
 data LispError
@@ -405,43 +411,54 @@ data LispError
   | ControlFlow !LispValue
   deriving (Show, Eq)
 
-type InterpreterTIO = ExceptT LispError (StateT Env IO) LispValue
+type InterpreterTIO = ExceptT LispError (StateT AllEnv IO) LispValue
 
-initEnv :: Maybe Env -> Env
-initEnv !parent = Env {env = M.empty, parent = parent}
+initEnv :: Maybe AllEnv -> AllEnv
+initEnv !parent = SimpleEnv $ Env {env = M.empty, parent = parent}
 
 --{-# INLINE initEnv #-}
 
-lookupEnv :: T.Text -> Env -> Maybe LispValue
-lookupEnv !k !environ = go (Just environ)
+lookupEnv :: T.Text -> AllEnv -> Maybe LispValue
+lookupEnv !k !environ = go' (Just environ)
   where
-    go (Just Env {..}) = case M.lookup k env of
+    go' :: Maybe AllEnv -> Maybe LispValue
+    go' (Just (SimpleEnv env)) = go (env)
+    go' (Just (RecEnv (ClosureEnv bindings parent))) =
+      case M.lookup k bindings of
+        Just v -> case v of
+          (ExprLambda ids expr) -> Just $! LispClosure ids expr environ
+          _ -> error "Non-callable found in closure environment"
+        Nothing -> go' (Just parent)
+    go' Nothing = Nothing
+
+    go (Env {..}) = case M.lookup k env of
       Just v -> Just $! v
-      Nothing -> go parent
-    go Nothing = Nothing
+      Nothing -> go' parent
 
 --{-# INLINE lookupEnv #-}
 
-updateEnv :: T.Text -> LispValue -> Env -> Maybe Env
-updateEnv !k !v !s = go (Just $! s)
-  where
-    go (Just s'@Env {..}) = case M.lookup k env of
-      Just _ -> Just s' {env = M.update (\_ -> Just v) k env}
-      Nothing -> do
-        !parent_state <- go parent
-        return $ s' {parent = Just parent_state}
-    go Nothing = Nothing
+-- updateEnv :: T.Text -> LispValue -> Env -> Maybe Env
+-- updateEnv !k !v !s = go (Just $! s)
+--   where
+--     go (Just s'@Env {..}) = case M.lookup k env of
+--       Just _ -> Just s' {env = M.update (\_ -> Just v) k env}
+--       Nothing -> do
+--         !parent_state <- go parent
+--         return $ s' {parent = Just parent_state}
+--     go Nothing = Nothing
 
-insertEnv :: T.Text -> LispValue -> Env -> Env
-insertEnv !k !v s@Env {..} = s {env = M.insert k v env}
+insertEnv :: T.Text -> LispValue -> AllEnv -> AllEnv
+insertEnv !k !v (SimpleEnv s@Env {..}) = SimpleEnv $ s {env = M.insert k v env}
+insertEnv _ _ _ = error "insertEnv not implemented for ClosureEnv"
 
 --{-# INLINE insertEnv #-}
 
-multiInsertEnv :: [(T.Text, LispValue)] -> Env -> Env
-multiInsertEnv !values s@Env {..} =
+multiInsertEnv :: [(T.Text, LispValue)] -> AllEnv -> AllEnv
+multiInsertEnv !values (SimpleEnv (s@Env {..})) =
   let new_env = M.fromList values
       !new_env' = M.union new_env env
-   in s {env = new_env'}
+   in SimpleEnv $ s {env = new_env'}
+multiInsertEnv _ _ = error "multiInsertEnv not implemented for ClosureEnv"
 
 -- {-# INLINE multiInsertEnv #-}
 
@@ -471,8 +488,8 @@ interpretExpr (ExprLambda ids expr) = LispClosure ids expr <$> get
 interpretExpr (ExprApp exp exprs) = do
   orig_env <- get
   func <- interpretExpr exp
-  liftIO $ putStrLn $ "calling "  ++ show func
-  liftIO $ putStrLn $ show exprs
+  -- liftIO $ putStrLn $ "calling "  ++ show func
+  -- liftIO $ putStrLn $ show exprs
   case func of
     LispClosure ids expr closure -> do
       args <- mapM interpretExpr exprs
@@ -550,6 +567,30 @@ interpretExpr (ExprLet (Identifier x, var_expr) expr) = do
   let env' = initEnv (Just s)
   put $ insertEnv x var_expr' env'
   interpretExpr expr
+interpretExpr (ExprLetRec bindings expr) = do
+  env <- get
+  let closure_map = M.fromList (L.map (\((Identifier x), y)->(x,y)) bindings)
+  put $ RecEnv $ ClosureEnv closure_map env
+  interpretExpr expr
+--   subexps' <- mapM interpretExpr exprs  -- these lambdas here will have default env. Need to replace
+--   return undefined
+  -- where
+  --   getLambda sub_exp = case sub_exp of
+  --     (ExprLambda ids body) -> Just $ LispClosure ids body
+  --     _ -> Nothing
+
+
+
+
+-- LispClosure ids expr closure -> do
+--       args <- mapM interpretExpr exprs
+--       let !pa = L.zip (L.map unIdent ids) args
+--       let !s = multiInsertEnv pa (initEnv (Just closure))
+--       put $! s
+--       value <- interpretExpr expr
+--       put $! orig_env
+--       return $! value
+--     e -> ExceptT . return . Left $ SystemError $ T.pack "expecting callable: Got" <> T.pack (show e)
 
 
 interpretCmp :: LispValue -> LispValue -> (Int -> Int -> Bool) -> InterpreterTIO
@@ -569,3 +610,26 @@ runInterpreter input = do
         Right f -> return $ Right f
         Left e -> return $ Left e
     Left e -> error $ show e
+
+
+
+-- data Env = Env
+--   { env :: !(M.Map T.Text LispValue),
+--     parent :: !(Maybe Env)
+--   }
+--   deriving (Show, Eq)
+
+
+-- type RecMap = M.Map Int RecEnv
+-- data RecEnv = RecEnv Int (RecMap)
+
+-- buildRecMap :: [Int] -> RecMap
+-- buildRecMap (x:y:ys) =
+--   let firstMap = M.insert x (RecEnv x nextMap) (M.empty)
+--       nextMap = buildRecMaps firstMap y ys
+--   in
+--     firstMap
+
+-- buildRecMaps :: RecMap -> Int -> [Int] -> RecMap
+-- buildRecMaps prevMap value [] = let
+--   nextmap = M.insert value (RecEnv value prevMap)
