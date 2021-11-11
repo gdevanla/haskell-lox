@@ -75,7 +75,9 @@ test_lisp_interpret = testGroup "test_list_interpret" [
   lispInterpret "let a = 10 in let a=(* a 2) in a" $ Right (LispInt 20),
 
   lispInterpret "let c = 10 in let a = 20 in let z = (lambda (x y) (* x y)) in (z c a)" $ Right (LispInt 200),
-  lispInterpret "let c = 10 in let a = 20 in let z = (lambda (x y) (* x y)) in (z (z c a) (z c a))" $ Right (LispInt 40000)
+  lispInterpret "let c = 10 in let a = 20 in let z = (lambda (x y) (* x y)) in (z (z c a) (z c a))" $ Right (LispInt 40000),
+
+  lispInterpret "letrec f = (lambda (x) (* x 20)) and g = (lambda (y) (*2 (f y))) in (g 10)" $ Right (LispInt 400)
   ]
 
 test_prog1 =
@@ -106,6 +108,30 @@ test_prog3 =
           |]
    in lispInterpret source (Right (LispInt 120))
 
+test_prog4 =
+  let source =
+        [s|letrec even = (lambda (x) (if (== x 0) 1 (odd (- x 1)))) and
+                  odd  = (lambda (x) (if (== x 0) 0 (even (- x 1))))
+           in (even 6)
+         |]
+   in lispInterpret source (Right (LispInt 1))
+
+test_prog5 =
+  let source =
+        [s|letrec even = (lambda (x) (if (== x 0) 1 (odd (- x 1)))) and
+                  odd  = (lambda (x) (if (== x 0) 0 (even (- x 1))))
+           in (even 1001)
+         |]
+   in lispInterpret source (Right (LispInt 0))
+
+test_prog6 =
+  let source =
+        [s|letrec fib = (lambda (n) (if (<= n 1) n (+ (fib (-n 1)) (fib (- n 2)))))
+           in (fib 55)
+         |]
+   in lispInterpret source (Right (LispInt 0))
+
+
 test_prints = [
   test_print "a",
   test_print "(a y)",
@@ -118,7 +144,7 @@ test_prints = [
   test_print "(|| (lambda (x)\n  (if y\n      z\n      z)) (lambda (x y)\n  (+   1 2)))"
   ]
 
-test_lisp_parsers = testGroup "test_lisp_parsers" $ test_exprs ++ test_prints ++ [test_prog1, test_prog2, test_prog3]
+test_lisp_parsers = testGroup "test_lisp_parsers" $ test_exprs ++ test_prints ++ [test_prog1, test_prog2, test_prog3, test_prog4, test_prog5, test_prog6]
 
 -- test_interpret = testGroup "test_lisp_interpret" $ test_lisp_interpreter
 
