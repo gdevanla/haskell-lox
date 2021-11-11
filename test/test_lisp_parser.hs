@@ -1,3 +1,4 @@
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE OverloadedStrings#-}
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 import RIO
@@ -5,6 +6,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 import Data.Text as T
 import LispParser
+import Data.String.QQ
 
 test_parser input expected = testCase input $ do
   let result = lexAndParse input
@@ -45,7 +47,7 @@ test_exprs = [
 
   test_parser "(and a b)" $ ExprPrimPred PrimAnd (ExprVar "a") (ExprVar "b"),
 
-  test_parser  "let a = 10 in let z = 10 in z * a" $ (ExprLet (Identifier {unIdent = "a"},ExprLitNum 10) (ExprLet (Identifier {unIdent = "z"},ExprLitNum 10) (ExprVar "z")))
+  test_parser  "let a = 10 in let z = 10 in z * a" $ ExprLet (Identifier {unIdent = "a"},ExprLitNum 10) (ExprLet (Identifier {unIdent = "z"},ExprLitNum 10) (ExprVar "z"))
 
   ]
 
@@ -74,6 +76,33 @@ test_lisp_interpret = testGroup "test_list_interpret" [
   lispInterpret "let c = 10 in let a = 20 in let z = (lambda (x y) (* x y)) in (z (z c a) (z c a))" $ Right (LispInt 40000)
   ]
 
+test_prog1 =
+  let source =
+        [s|let x = 5 in
+        let x = 38 in
+            let f = (lambda (y z) (* y (+ x z))) in
+              let g = (lambda (u) (* u x)) in
+                (f (g 3) 17)
+      |]
+   in lispInterpret source (Right (LispInt 6270))
+
+test_prog2 =
+  let source =
+        [s|let makemult = (lambda (maker x)
+                             (if x (+ 4 (maker maker (- x 1))) 0)) in
+            let times4 = (lambda (x) (makemult makemult x)) in
+                (times4 5)
+          |]
+   in lispInterpret source (Right (LispInt 20))
+
+test_prog3 =
+  let source =
+        [s|let makemult = (lambda (maker x)
+                             (if (== x 1) 1 (* x (maker maker (- x 1))))) in
+            let times4 = (lambda (x) (makemult makemult x)) in
+                (times4 5)
+          |]
+   in lispInterpret source (Right (LispInt 20))
 
 test_prints = [
   test_print "a",
@@ -85,11 +114,9 @@ test_prints = [
   test_print "(<= a b)",
   test_print "(or a b)",
   test_print "(or (lambda (x)\n  (if y\n      z\n      z)) (lambda (x y)\n  (+   1 2)))"
-
-
   ]
 
-test_lisp_parsers = testGroup "test_lisp_parsers" $ test_exprs ++ test_prints
+test_lisp_parsers = testGroup "test_lisp_parsers" $ test_exprs ++ test_prints ++ [test_prog1, test_prog2, test_prog3]
 
 -- test_interpret = testGroup "test_lisp_interpret" $ test_lisp_interpreter
 
