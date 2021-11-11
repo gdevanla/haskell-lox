@@ -127,9 +127,9 @@ test_prog5 =
 test_prog6 =
   let source =
         [s|letrec fib = (lambda (n) (if (<= n 1) n (+ (fib (-n 1)) (fib (- n 2)))))
-           in (fib 55)
+           in (fib 20)
          |]
-   in lispInterpret source (Right (LispInt 0))
+   in lispInterpret source (Right (LispInt 6765))
 
 
 test_prints = [
