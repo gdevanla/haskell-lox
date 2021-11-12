@@ -572,25 +572,6 @@ interpretExpr (ExprLetRec bindings expr) = do
   let closure_map = M.fromList (L.map (\((Identifier x), y)->(x,y)) bindings)
   put $ RecEnv $ ClosureEnv closure_map env
   interpretExpr expr
---   subexps' <- mapM interpretExpr exprs  -- these lambdas here will have default env. Need to replace
---   return undefined
-  -- where
-  --   getLambda sub_exp = case sub_exp of
-  --     (ExprLambda ids body) -> Just $ LispClosure ids body
-  --     _ -> Nothing
-
-
-
-
--- LispClosure ids expr closure -> do
---       args <- mapM interpretExpr exprs
---       let !pa = L.zip (L.map unIdent ids) args
---       let !s = multiInsertEnv pa (initEnv (Just closure))
---       put $! s
---       value <- interpretExpr expr
---       put $! orig_env
---       return $! value
---     e -> ExceptT . return . Left $ SystemError $ T.pack "expecting callable: Got" <> T.pack (show e)
 
 
 interpretCmp :: LispValue -> LispValue -> (Int -> Int -> Bool) -> InterpreterTIO
@@ -612,24 +593,122 @@ runInterpreter input = do
     Left e -> error $ show e
 
 
+type Cont = (LispValue -> LispValue)
 
--- data Env = Env
---   { env :: !(M.Map T.Text LispValue),
---     parent :: !(Maybe Env)
---   }
---   deriving (Show, Eq)
+applyCont :: Cont -> LispValue -> LispValue
+applyCont cont val = cont val
+
+interpretCPSExpr :: Expr -> Cont -> InterpreterTIO
+interpretCPSExpr (ExprLitNum a) cont = return $ applyCont cont (LispInt a)
+-- interpretExpr (ExprVar var) = do
+--   env <- get
+--   case lookupEnv var env of
+--     Just v -> return v
+--     Nothing -> ExceptT . return . Left $ SystemError $ "undefined var:" <> var
+-- interpretExpr (ExprLambda ids expr) = LispClosure ids expr <$> get
+-- interpretExpr (ExprApp exp exprs) = do
+--   orig_env <- get
+--   func <- interpretExpr exp
+--   -- liftIO $ putStrLn $ "calling "  ++ show func
+--   -- liftIO $ putStrLn $ show exprs
+--   case func of
+--     LispClosure ids expr closure -> do
+--       args <- mapM interpretExpr exprs
+--       let !pa = L.zip (L.map unIdent ids) args
+--       let !s = multiInsertEnv pa (initEnv (Just closure))
+--       put $! s
+--       value <- interpretExpr expr
+--       put $! orig_env
+--       return $! value
+--     e -> ExceptT . return . Left $ SystemError $ T.pack "expecting callable: Got" <> T.pack (show e)
+
+-- interpretExpr (ExprIf test_exp true_exp false_exp) = do
+--   test <- interpretExpr test_exp
+--   if isTruthy test then interpretExpr true_exp else interpretExpr false_exp
+-- interpretExpr (ExprPrim prim exprs) = do
+--   rands <- mapM interpretExpr exprs
+--   let rands' = traverse convert rands
+--   case rands' of
+--     Right (x : xs) -> return $ LispInt $ applyPrim (func prim) x xs
+--     Right _ -> ExceptT . return . Left $ SystemError $ T.pack "Not enough operands for " <> T.pack (show prim)
+--     Left e -> ExceptT . return . Left $ SystemError e
+--   where
+--     convert (LispInt a) = Right a
+--     convert x = Left $ T.pack "Invalid rand for primitive type: " <> T.pack (show x)
+
+--     applyPrim :: (Int -> Int -> Int) -> Int -> [Int] -> Int
+--     applyPrim func' i vs = L.foldl' func' i vs
+
+--     func PrimAdd = (+)
+--     func PrimSub = (-)
+--     func PrimMult = (*)
+
+-- -- interpretExpr (ExprPrimPred PrimNot [expr]) = do
+-- --   result <- interpretExpr expr
+-- --   if not (isTruthy result) then return (LispInt 1) else return (LispInt 0)
+-- -- interpretExpr (ExprPrimPred PrimNot _) = ExceptT . return . Left $ SystemError "Operand need for `not`"
+
+-- interpretExpr (ExprPrimPred PrimAnd expr1 expr2) = do
+--   result <- interpretExpr expr1
+--   if isTruthy result
+--     then do
+--       result2 <- interpretExpr expr2
+--       if isTruthy result2 then return (LispInt 1) else return (LispInt 0)
+--     else return (LispInt 0)
+-- interpretExpr (ExprPrimPred PrimOr expr1 expr2) = do
+--   result <- interpretExpr expr1
+--   if isTruthy result
+--     then return (LispInt 1)
+--     else do
+--       result2 <- interpretExpr expr2
+--       if isTruthy result2 then return (LispInt 1) else return (LispInt 0)
+-- interpretExpr (ExprPrimPred PrimLt expr1 expr2) = do
+--   result1 <- interpretExpr expr1
+--   result2 <- interpretExpr expr2
+--   interpretCmp result1 result2 (<)
+-- interpretExpr (ExprPrimPred PrimGt expr1 expr2) = do
+--   result1 <- interpretExpr expr1
+--   result2 <- interpretExpr expr2
+--   interpretCmp result1 result2 (>)
+-- interpretExpr (ExprPrimPred PrimLte expr1 expr2) = do
+--   result1 <- interpretExpr expr1
+--   result2 <- interpretExpr expr2
+--   interpretCmp result1 result2 (<=)
+-- interpretExpr (ExprPrimPred PrimGte expr1 expr2) = do
+--   result1 <- interpretExpr expr1
+--   result2 <- interpretExpr expr2
+--   interpretCmp result1 result2 (>=)
+-- interpretExpr (ExprPrimPred PrimEq expr1 expr2) = do
+--   result1 <- interpretExpr expr1
+--   result2 <- interpretExpr expr2
+--   interpretCmp result1 result2 (==)
+-- interpretExpr (ExprLet (Identifier x, var_expr) expr) = do
+--   var_expr' <- interpretExpr var_expr
+--   s <- get
+--   let env' = initEnv (Just s)
+--   put $ insertEnv x var_expr' env'
+--   interpretExpr expr
+-- interpretExpr (ExprLetRec bindings expr) = do
+--   env <- get
+--   let closure_map = M.fromList (L.map (\((Identifier x), y)->(x,y)) bindings)
+--   put $ RecEnv $ ClosureEnv closure_map env
+--   interpretExpr expr
 
 
--- type RecMap = M.Map Int RecEnv
--- data RecEnv = RecEnv Int (RecMap)
+-- interpretCmp :: LispValue -> LispValue -> (Int -> Int -> Bool) -> InterpreterTIO
+-- interpretCmp (LispInt x) (LispInt y) op = if x `op` y then return (LispInt 1) else return (LispInt 0)
+-- interpretCmp result1 result2 _ =
+--   ExceptT . return . Left $
+--     SystemError $ T.pack "Unsupported comparision for " <> T.pack (show result1) <> " and " <> T.pack (show result2)
 
--- buildRecMap :: [Int] -> RecMap
--- buildRecMap (x:y:ys) =
---   let firstMap = M.insert x (RecEnv x nextMap) (M.empty)
---       nextMap = buildRecMaps firstMap y ys
---   in
---     firstMap
-
--- buildRecMaps :: RecMap -> Int -> [Int] -> RecMap
--- buildRecMaps prevMap value [] = let
---   nextmap = M.insert value (RecEnv value prevMap)
+runCPSInterpreter :: String -> Cont -> IO (Either LispError LispValue)
+runCPSInterpreter input cont = do
+  let result = lexAndParse input
+  case result of
+    Right r -> do
+      let inter = runExceptT (interpretCPSExpr r cont)
+      (final, _) <- runStateT inter (initEnv Nothing)
+      case final of
+        Right f -> return $ Right f
+        Left e -> return $ Left e
+    Left e -> error $ show e
