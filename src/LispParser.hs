@@ -591,9 +591,7 @@ runInterpreter input = do
         Left e -> return $ Left e
     Left e -> error $ show e
 
-
 type Cont = (LispValue -> InterpreterTIO)
-
 
 testCont :: Expr -> Expr -> Cont -> LispValue -> InterpreterTIO
 testCont true_exp false_exp cont val = do
@@ -606,29 +604,34 @@ applyCont cont val = cont val
 
 interpretCPSExpr :: Expr -> Cont -> InterpreterTIO
 interpretCPSExpr (ExprLitNum a) cont = applyCont cont (LispInt a)
--- interpretCPSExpr (ExprVar var) cont = do
---   env <- get
---   case lookupEnv var env of
---     Just v -> applyCont cont v
---     Nothing -> ExceptT . return . Left $ SystemError $ "undefined var:" <> var
+interpretCPSExpr (ExprVar var) cont = do
+  env <- get
+  case lookupEnv var env of
+    Just v -> applyCont cont v
+    Nothing -> ExceptT . return . Left $ SystemError $ "undefined var:" <> var
 interpretCPSExpr (ExprLambda ids expr) cont = do
   val <- ((LispClosure ids expr) <$> get)
   applyCont cont val
--- interpretCPSExpr (ExprApp exp exprs) cont = do
---   orig_env <- get
---   func <- interpretCPSExpr exp cont
---   -- liftIO $ putStrLn $ "calling "  ++ show func
---   -- liftIO $ putStrLn $ show exprs
---   case func of
---     LispClosure ids expr closure -> do
---       args <- mapM (flip interpretCPSExpr cont) exprs
---       let !pa = L.zip (L.map unIdent ids) args
---       let !s = multiInsertEnv pa (initEnv (Just closure))
---       put $! s
---       value <- interpretExpr expr
---       put $! orig_env
---       return $! applyCont cont value
---     e -> ExceptT . return . Left $ SystemError $ T.pack "expecting callable: Got" <> T.pack (show e)
+interpretCPSExpr (ExprApp exp exprs) cont = do
+  interpretCPSExpr exp (applyFunc exprs cont)
+  where
+    applyFunc exprs cont func =  do
+      case func of
+        LispClosure ids expr closure -> do
+          evalRands exprs (applyArgs ids expr closure cont)
+        e -> ExceptT . return . Left $ SystemError $ T.pack "expecting callable: Got" <> T.pack (show e)
+
+    applyArgs ids expr closure cont args = do
+      orig_env <- get
+      let !pa = L.zip (L.map unIdent ids) args
+      let !s = multiInsertEnv pa (initEnv (Just closure))
+      put $! s
+      interpretCPSExpr expr (\val -> do
+                                put $! orig_env
+                                applyCont cont val)
+      --put $! orig_env
+      --applyCont cont value
+
 
 interpretCPSExpr (ExprIf test_exp true_exp false_exp) cont = do
   interpretCPSExpr test_exp (testCont true_exp false_exp cont)
@@ -653,17 +656,6 @@ interpretCPSExpr (ExprPrim prim rands) cont = do
         Right (x : xs) -> applyCont cont $ LispInt $ applyPrim (func prim) x xs
         Right _ -> ExceptT . return . Left $ SystemError $ T.pack "Not enough operands for " <> T.pack (show prim)
         Left e -> ExceptT . return . Left $ SystemError e
-
-
-    evalRands :: [Expr] -> ([LispValue] -> InterpreterTIO) -> InterpreterTIO
-    evalRands [] cont = cont []
-    evalRands (x:xs) cont = interpretCPSExpr x (evalFirstCont xs cont)
-
-    evalFirstCont :: [Expr] -> ([LispValue] -> InterpreterTIO) -> LispValue -> InterpreterTIO
-    evalFirstCont xs cont val = evalRands xs (evalRestCont val cont)
-
-    evalRestCont :: LispValue -> ([LispValue] -> InterpreterTIO) -> [LispValue] -> InterpreterTIO
-    evalRestCont first_val cont rest_val = cont $ (first_val:rest_val)
 
 
 
@@ -699,7 +691,24 @@ interpretCPSExpr (ExprPrimPred PrimGte expr1 expr2) cont = do
 interpretCPSExpr (ExprPrimPred PrimEq expr1 expr2) cont = do
   cmpCont expr1 expr2 cont (==)
 
-cmpCont expr1 expr2 cont cmp_func = interpretCPSExpr
+interpretCPSExpr (ExprLet (Identifier x, var_expr) expr) cont = do
+  interpretCPSExpr var_expr (add_binding x cont)
+  where
+    add_binding x cont val = do
+      s <- get
+      let env' = initEnv (Just s)
+      put $ insertEnv x val env'
+      interpretCPSExpr expr cont
+
+interpretCPSExpr (ExprLetRec bindings expr) cont = do
+  env <- get
+  let closure_map = M.fromList (L.map (\((Identifier x), y)->(x,y)) bindings)
+  put $ RecEnv $ ClosureEnv closure_map env
+  interpretCPSExpr expr cont
+
+
+cmpCont expr1 expr2 cont cmp_func =
+  interpretCPSExpr
     expr1
     ( \val1 ->
         interpretCPSExpr
@@ -710,30 +719,24 @@ cmpCont expr1 expr2 cont cmp_func = interpretCPSExpr
     )
 
 interpretCPSCmp :: LispValue -> LispValue -> (Int -> Int -> Bool) -> Cont -> InterpreterTIO
-interpretCPSCmp (LispInt x) (LispInt y) op cont = if x `op` y
-  then cont (LispInt 1) else cont (LispInt 0)
+interpretCPSCmp (LispInt x) (LispInt y) op cont =
+  if x `op` y
+    then cont (LispInt 1)
+    else cont (LispInt 0)
 interpretCPSCmp result1 result2 _ _ =
   ExceptT . return . Left $
     SystemError $ T.pack "Unsupported comparision for " <> T.pack (show result1) <> " and " <> T.pack (show result2)
 
--- interpretExpr (ExprLet (Identifier x, var_expr) expr) = do
---   var_expr' <- interpretExpr var_expr
---   s <- get
---   let env' = initEnv (Just s)
---   put $ insertEnv x var_expr' env'
---   interpretExpr expr
--- interpretExpr (ExprLetRec bindings expr) = do
---   env <- get
---   let closure_map = M.fromList (L.map (\((Identifier x), y)->(x,y)) bindings)
---   put $ RecEnv $ ClosureEnv closure_map env
---   interpretExpr expr
+evalRands :: [Expr] -> ([LispValue] -> InterpreterTIO) -> InterpreterTIO
+evalRands [] cont = cont []
+evalRands (x : xs) cont = interpretCPSExpr x (evalFirstCont xs cont)
 
+evalFirstCont :: [Expr] -> ([LispValue] -> InterpreterTIO) -> LispValue -> InterpreterTIO
+evalFirstCont xs cont val = evalRands xs (evalRestCont val cont)
 
--- interpretCmp :: LispValue -> LispValue -> (Int -> Int -> Bool) -> InterpreterTIO
--- interpretCmp (LispInt x) (LispInt y) op = if x `op` y then return (LispInt 1) else return (LispInt 0)
--- interpretCmp result1 result2 _ =
---   ExceptT . return . Left $
---     SystemError $ T.pack "Unsupported comparision for " <> T.pack (show result1) <> " and " <> T.pack (show result2)
+evalRestCont :: LispValue -> ([LispValue] -> InterpreterTIO) -> [LispValue] -> InterpreterTIO
+evalRestCont first_val cont rest_val = cont $ (first_val : rest_val)
+
 
 runCPSInterpreter :: String -> Cont -> IO (Either LispError LispValue)
 runCPSInterpreter input cont = do

@@ -71,16 +71,20 @@ test_lisp_interpret cont  =
       lispInterpret "(<= 1 1)" (Right $ LispInt 1) cont,
       lispInterpret "(>= 1 1)" (Right $ LispInt 1) cont,
       lispInterpret "(> 1 1)" (Right $ LispInt 0) cont,
-      lispInterpret "(< 1 1)" (Right $ LispInt 0) cont
-      -- lispInterpret "(if 0 (* 5 10) (+ 3 4))" (Right $ LispInt 7) cont,
-      -- lispInterpret "(if (- 5 1) (* 5 10) (+ 3 4))" (Right $ LispInt 50) cont,
-      -- lispInterpret "let a = 10 in let b=100 in (* a b)" (Right (LispInt 1000)) cont,
-      -- lispInterpret "let a = 10 in let b=(* a 2) in (* a b)" (Right (LispInt 200)) cont,
-      -- -- test shadowing
-      -- lispInterpret "let a = 10 in let a=(* a 2) in a" (Right (LispInt 20)) cont,
-      -- lispInterpret "let c = 10 in let a = 20 in let z = (lambda (x y) (* x y)) in (z c a)" (Right (LispInt 200)) cont,
-      -- lispInterpret "let c = 10 in let a = 20 in let z = (lambda (x y) (* x y)) in (z (z c a) (z c a))" (Right (LispInt 40000)) cont,
-      -- lispInterpret "letrec f = (lambda (x) (* x 20)) and g = (lambda (y) (*2 (f y))) in (g 10)" (Right (LispInt 400)) cont
+      lispInterpret "(< 1 1)" (Right $ LispInt 0) cont,
+      lispInterpret "(if 0 (* 5 10) (+ 3 4))" (Right $ LispInt 7) cont,
+      lispInterpret "(if (- 5 1) (* 5 10) (+ 3 4))" (Right $ LispInt 50) cont,
+      lispInterpret "let a = 10 in (* 10 20)" (Right (LispInt 200)) cont,
+      lispInterpret "let a = 10 in let b=(* a 2) in (* a b)" (Right (LispInt 200)) cont,
+      -- test shadowing
+      lispInterpret "let a = 10 in let a=(* a 2) in a" (Right (LispInt 20)) cont,
+      -- Application
+      lispInterpret "let x = (lambda (y) y) in (x 10)" (Right (LispInt 10)) cont,
+      lispInterpret "let a = 100 in let x = (lambda (y) y) in let z = 20 in (x (x z))" (Right (LispInt 20)) cont,
+      lispInterpret "let a = 100 in let x = (lambda (w y) (+ w y)) in let z = 20 in (x (x z 1) 10)" (Right (LispInt 31)) cont,
+      lispInterpret "let c = 10 in let a = 20 in let z = (lambda (x y) (* x y)) in (z c a)" (Right (LispInt 200)) cont,
+      lispInterpret "let c = 10 in let a = 20 in let z = (lambda (x y) (* x y)) in (z (z c a) (z c a))" (Right (LispInt 40000)) cont
+      --lispInterpret "letrec f = (lambda (x) (* x 20)) and g = (lambda (y) (*2 (f y))) in (g 10)" (Right (LispInt 400)) cont
     ]
 
 test_prog1 cont =
@@ -162,10 +166,13 @@ main = do
          ]
 
   let non_cont =  testGroup "list_interpret_prog" $  L.map (\f -> f Nothing) tests
+  let with_cont =  testGroup "list_interpret_prog" $  L.map (\f -> f (Just undefined)) tests
+
   defaultMain $ testGroup "test_lisp" [
     test_lisp_parsers,
     test_lisp_interpret Nothing,
     test_lisp_interpret (Just id),
-    non_cont]
+    non_cont,
+    with_cont]
 
 --defaultMain tests
