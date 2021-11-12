@@ -54,14 +54,19 @@ test_exprs =
 
 lispInterpret input expected cont = testCase input $ do
   result <- case cont of
-    Just cont' -> runCPSInterpreter input return
+    Just _ -> runCPSInterpreter input return
     Nothing -> runInterpreter input
   putStrLn $ show result
   expected @=? result
 
+test_lisp_interpret_cps =
+  testGroup "test_lisp_cps_specific" [
+  lispInterpret "(try 1 catch (lambda (x) x))" (Right (LispInt 1)) (Just undefined)
+  ]
+
 test_lisp_interpret cont  =
   testGroup
-    ("test_list_interpret" <> (if isJust cont then "_cont" else ""))
+    ("test_lisp_interpret" <> (if isJust cont then "_cont" else ""))
     [
       lispInterpret "1" (Right $ LispInt 1) cont,
       lispInterpret "(+ 1 2)" (Right $ LispInt 3) cont,
@@ -85,8 +90,8 @@ test_lisp_interpret cont  =
       lispInterpret "let a = 100 in let x = (lambda (y) y) in let z = 20 in (x (x z))" (Right (LispInt 20)) cont,
       lispInterpret "let a = 100 in let x = (lambda (w y) (+ w y)) in let z = 20 in (x (x z 1) 10)" (Right (LispInt 31)) cont,
       lispInterpret "let c = 10 in let a = 20 in let z = (lambda (x y) (* x y)) in (z c a)" (Right (LispInt 200)) cont,
-      lispInterpret "let c = 10 in let a = 20 in let z = (lambda (x y) (* x y)) in (z (z c a) (z c a))" (Right (LispInt 40000)) cont
-      --lispInterpret "letrec f = (lambda (x) (* x 20)) and g = (lambda (y) (*2 (f y))) in (g 10)" (Right (LispInt 400)) cont
+      lispInterpret "let c = 10 in let a = 20 in let z = (lambda (x y) (* x y)) in (z (z c a) (z c a))" (Right (LispInt 40000)) cont,
+      lispInterpret "letrec f = (lambda (x) (* x 20)) and g = (lambda (y) (*2 (f y))) in (g 10)" (Right (LispInt 400)) cont
     ]
 
 test_prog1 cont =
