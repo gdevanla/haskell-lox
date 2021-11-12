@@ -688,26 +688,26 @@ interpretCPSExpr (ExprPrim prim rands) cont = do
 --       if isTruthy result2 then return (LispInt 1) else return (LispInt 0)
 
 interpretCPSExpr (ExprPrimPred PrimLt expr1 expr2) cont = do
-  result1 <- interpretCPSExpr expr1 cont
-  result2 <- interpretCPSExpr expr2 cont
-  interpretCPSCmp result1 result2 (<) cont
-interpretCPSExpr (ExprPrimPred PrimGt expr1 expr2) cont = do
-  result1 <- interpretCPSExpr expr1 cont
-  result2 <- interpretCPSExpr expr2 cont
-  interpretCPSCmp result1 result2 (>) cont
-interpretCPSExpr (ExprPrimPred PrimLte expr1 expr2) cont = do
-  result1 <- interpretCPSExpr expr1 cont
-  result2 <- interpretCPSExpr expr2 cont
-  interpretCPSCmp result1 result2 (>=) cont
-interpretCPSExpr (ExprPrimPred PrimGte expr1 expr2) cont = do
-  result1 <- interpretCPSExpr expr1 cont
-  result2 <- interpretCPSExpr expr2 cont
-  interpretCPSCmp result1 result2 (>=) cont
-interpretCPSExpr (ExprPrimPred PrimEq expr1 expr2) cont = do
-  result1 <- interpretCPSExpr expr1 cont
-  result2 <- interpretCPSExpr expr2 cont
-  interpretCPSCmp result1 result2 (==) cont
+  cmpCont expr1 expr2 cont (<)
 
+interpretCPSExpr (ExprPrimPred PrimGt expr1 expr2) cont = do
+  cmpCont expr1 expr2 cont (>)
+interpretCPSExpr (ExprPrimPred PrimLte expr1 expr2) cont = do
+  cmpCont expr1 expr2 cont (<=)
+interpretCPSExpr (ExprPrimPred PrimGte expr1 expr2) cont = do
+  cmpCont expr1 expr2 cont (>=)
+interpretCPSExpr (ExprPrimPred PrimEq expr1 expr2) cont = do
+  cmpCont expr1 expr2 cont (==)
+
+cmpCont expr1 expr2 cont cmp_func = interpretCPSExpr
+    expr1
+    ( \val1 ->
+        interpretCPSExpr
+          expr2
+          ( \val2 ->
+              interpretCPSCmp val1 val2 cmp_func cont
+          )
+    )
 
 interpretCPSCmp :: LispValue -> LispValue -> (Int -> Int -> Bool) -> Cont -> InterpreterTIO
 interpretCPSCmp (LispInt x) (LispInt y) op cont = if x `op` y
