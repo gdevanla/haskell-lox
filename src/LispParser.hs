@@ -611,7 +611,9 @@ interpretCPSExpr (ExprLitNum a) cont = applyCont cont (LispInt a)
 --   case lookupEnv var env of
 --     Just v -> applyCont cont v
 --     Nothing -> ExceptT . return . Left $ SystemError $ "undefined var:" <> var
--- interpretExpr (ExprLambda ids expr) = LispClosure ids expr <$> get
+interpretCPSExpr (ExprLambda ids expr) cont = do
+  val <- ((LispClosure ids expr) <$> get)
+  applyCont cont val
 -- interpretCPSExpr (ExprApp exp exprs) cont = do
 --   orig_env <- get
 --   func <- interpretCPSExpr exp cont
@@ -631,13 +633,8 @@ interpretCPSExpr (ExprLitNum a) cont = applyCont cont (LispInt a)
 interpretCPSExpr (ExprIf test_exp true_exp false_exp) cont = do
   interpretCPSExpr test_exp (testCont true_exp false_exp cont)
 
-interpretCPSExpr (ExprPrim prim exprs) cont = do
-  rands <- mapM interpretExpr exprs
-  let rands' = traverse convert rands
-  case rands' of
-    Right (x : xs) -> applyCont cont (LispInt $ applyPrim (func prim) x xs)
-    Right _ -> ExceptT . return . Left $ SystemError $ T.pack "Not enough operands for " <> T.pack (show prim)
-    Left e -> ExceptT . return . Left $ SystemError e
+interpretCPSExpr (ExprPrim prim rands) cont = do
+  evalRands rands (primArgsCont prim cont)
   where
     convert (LispInt a) = Right a
     convert x = Left $ T.pack "Invalid rand for primitive type: " <> T.pack (show x)
@@ -648,6 +645,27 @@ interpretCPSExpr (ExprPrim prim exprs) cont = do
     func PrimAdd = (+)
     func PrimSub = (-)
     func PrimMult = (*)
+
+    primArgsCont :: Primitive -> Cont -> [LispValue] -> InterpreterTIO
+    primArgsCont prim cont args = do
+      let args' = traverse convert args  -- this is not CPS style yet
+      case args' of
+        Right (x : xs) -> applyCont cont $ LispInt $ applyPrim (func prim) x xs
+        Right _ -> ExceptT . return . Left $ SystemError $ T.pack "Not enough operands for " <> T.pack (show prim)
+        Left e -> ExceptT . return . Left $ SystemError e
+
+
+    evalRands :: [Expr] -> ([LispValue] -> InterpreterTIO) -> InterpreterTIO
+    evalRands [] cont = cont []
+    evalRands (x:xs) cont = interpretCPSExpr x (evalFirstCont xs cont)
+
+    evalFirstCont :: [Expr] -> ([LispValue] -> InterpreterTIO) -> LispValue -> InterpreterTIO
+    evalFirstCont xs cont val = evalRands xs (evalRestCont val cont)
+
+    evalRestCont :: LispValue -> ([LispValue] -> InterpreterTIO) -> [LispValue] -> InterpreterTIO
+    evalRestCont first_val cont rest_val = cont $ (first_val:rest_val)
+
+
 
 -- -- interpretExpr (ExprPrimPred PrimNot [expr]) = do
 -- --   result <- interpretExpr expr
