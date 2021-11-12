@@ -48,20 +48,21 @@ test_exprs =
     test_parser "(&& a b)" $ ExprPrimPred PrimAnd (ExprVar "a") (ExprVar "b"),
     test_parser "let a = 10 in let z = 10 in z * a" $ ExprLet (Identifier {unIdent = "a"}, ExprLitNum 10) (ExprLet (Identifier {unIdent = "z"}, ExprLitNum 10) (ExprVar "z")),
     test_parser "letrec f = (lambda (x) x) and g = (lambda (y) y) in (+ 2 3)" $ ExprLetRec [(Identifier {unIdent = "f"}, ExprLambda [Identifier {unIdent = "x"}] (ExprVar "x")), (Identifier {unIdent = "g"}, ExprLambda [Identifier {unIdent = "y"}] (ExprVar "y"))] (ExprPrim PrimAdd [ExprLitNum 2, ExprLitNum 3]),
-    test_parser "(try 1 catch 2)" $ ExprTryCatch (ExprLitNum 1) (ExprLitNum 2),
-    test_parser "(raise 1)" $ ExprRaise (ExprLitNum 1)
+    test_parser "(try 1 catch 2)" $ ExprTryCatch (ExprLitNum 1) (ExprLitNum 2)
+    --test_parser "(try (raise 1) catch (lambda (x) (+ x 1)))" $ ExprRaise (ExprLitNum 2)
   ]
 
 lispInterpret input expected cont = testCase input $ do
   result <- case cont of
-    Just _ -> runCPSInterpreter input return
+    Just _ -> runCPSInterpreter input (ContNormal return)
     Nothing -> runInterpreter input
   putStrLn $ show result
   expected @=? result
 
 test_lisp_interpret_cps =
   testGroup "test_lisp_cps_specific" [
-  lispInterpret "(try 1 catch (lambda (x) x))" (Right (LispInt 1)) (Just undefined)
+  lispInterpret "(try 1 catch (lambda (x) x))" (Right (LispInt 1)) (Just undefined),
+  lispInterpret "(try (raise 1) catch (lambda (x) (+ x 100)))" (Right (LispInt 101)) (Just undefined)
   ]
 
 test_lisp_interpret cont  =

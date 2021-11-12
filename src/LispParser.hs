@@ -634,16 +634,19 @@ runInterpreter input = do
 
 type Cont a = (a -> InterpreterTIO)
 
-testCont :: Expr -> Expr -> Cont LispValue -> LispValue -> InterpreterTIO
+data ContType a = ContNormal (Cont a) | ContExcept (Cont a)
+
+testCont :: Expr -> Expr -> ContType (LispValue) -> LispValue -> InterpreterTIO
 testCont true_exp false_exp cont val = do
   if (isTruthy val)
     then interpretCPSExpr true_exp cont
     else interpretCPSExpr false_exp cont
 
-applyCont :: Cont a -> a -> InterpreterTIO
-applyCont cont val = cont val
+applyCont :: ContType a -> a -> InterpreterTIO
+applyCont (ContNormal cont) val = cont val
+applyCont (ContExcept cont) val = cont val
 
-interpretCPSExpr :: Expr -> Cont LispValue -> InterpreterTIO
+interpretCPSExpr :: Expr -> ContType LispValue -> InterpreterTIO
 interpretCPSExpr (ExprLitNum a) cont = applyCont cont (LispInt a)
 interpretCPSExpr (ExprVar var) cont = do
   env <- get
@@ -654,12 +657,12 @@ interpretCPSExpr (ExprLambda ids expr) cont = do
   val <- ((LispClosure ids expr) <$> get)
   applyCont cont val
 interpretCPSExpr (ExprApp exp exprs) cont = do
-  interpretCPSExpr exp (applyFunc exprs cont)
+  interpretCPSExpr exp (ContNormal (applyFunc exprs cont))
   where
     applyFunc exprs cont func =  do
       case func of
         (LispClosure ids expr closure) -> do
-          evalRands exprs (applyArgs ids expr closure cont)
+          evalRands exprs (ContNormal (applyArgs ids expr closure cont))
         e -> ExceptT . return . Left $ SystemError $ T.pack "expecting callable: Got" <> T.pack (show e)
 
     applyArgs ids expr closure cont args = do
@@ -667,18 +670,18 @@ interpretCPSExpr (ExprApp exp exprs) cont = do
       let !pa = L.zip (L.map unIdent ids) args
       let !s = multiInsertEnv pa (initEnv (Just closure))
       put $! s
-      interpretCPSExpr expr (\val -> do
+      interpretCPSExpr expr (ContNormal (\val -> do
                                 put $! orig_env
-                                applyCont cont val)
+                                applyCont cont val))
       --put $! orig_env
       --applyCont cont value
 
 
 interpretCPSExpr (ExprIf test_exp true_exp false_exp) cont = do
-  interpretCPSExpr test_exp (testCont true_exp false_exp cont)
+  interpretCPSExpr test_exp (ContNormal (testCont true_exp false_exp cont))
 
 interpretCPSExpr (ExprPrim prim rands) cont = do
-  evalRands rands (primArgsCont prim cont)
+  evalRands rands (ContNormal (primArgsCont prim cont))
   where
     convert (LispInt a) = Right a
     convert x = Left $ T.pack "Invalid rand for primitive type: " <> T.pack (show x)
@@ -690,7 +693,7 @@ interpretCPSExpr (ExprPrim prim rands) cont = do
     func PrimSub = (-)
     func PrimMult = (*)
 
-    primArgsCont :: Primitive -> Cont LispValue -> [LispValue] -> InterpreterTIO
+    primArgsCont :: Primitive -> ContType ( LispValue) -> [LispValue] -> InterpreterTIO
     primArgsCont prim cont args = do
       let args' = traverse convert args  -- this is not CPS style yet
       case args' of
@@ -733,7 +736,7 @@ interpretCPSExpr (ExprPrimPred PrimEq expr1 expr2) cont = do
   cmpCont expr1 expr2 cont (==)
 
 interpretCPSExpr (ExprLet (Identifier x, var_expr) expr) cont = do
-  interpretCPSExpr var_expr (add_binding x cont)
+  interpretCPSExpr var_expr (ContNormal (add_binding x cont))
   where
     add_binding x cont val = do
       s <- get
@@ -748,50 +751,64 @@ interpretCPSExpr (ExprLetRec bindings expr) cont = do
   interpretCPSExpr expr cont
 
 interpretCPSExpr (ExprTryCatch try_expr1 handle_expr2) cont = do
-  interpretCPSExpr handle_expr2 (handler_cont try_expr1 cont)
+  interpretCPSExpr handle_expr2 (ContNormal (handler_cont try_expr1 cont))
   where
     handler_cont try_exp cont handler_val =
       case handler_val of
-        (LispClosure _ _ _) -> interpretCPSExpr try_exp (try_cont handler_val cont)
+        (LispClosure _ _ _) -> interpretCPSExpr try_exp (ContExcept (try_cont handler_val cont))
         _ -> ExceptT . return . Left $ SystemError "non-callable provided for try-catch handler"
 
     try_cont handler_val cont body_val = do
-      applyCont cont body_val
+      case handler_val of
+        (LispClosure ids expr closure) -> applyArgs ids expr closure cont [body_val]
+        e -> ExceptT . return . Left $ SystemError $ T.pack "expecting callable: Got" <> T.pack (show e)
 
-interpretCPSExpr (ExprRaise expr1) cont = undefined
+    applyArgs ids expr closure cont args = do
+      orig_env <- get
+      let !pa = L.zip (L.map unIdent ids) args
+      let !s = multiInsertEnv pa (initEnv (Just closure))
+      put $! s
+      interpretCPSExpr expr (ContNormal (\val -> do
+                                put $! orig_env
+                                applyCont cont val))
+      --put $! orig_env
+      --applyCont cont value
+
+
+interpretCPSExpr (ExprRaise expr1) cont = interpretCPSExpr expr1 cont
 
 cmpCont expr1 expr2 cont cmp_func =
   interpretCPSExpr
     expr1
-    ( \val1 ->
+    (ContNormal ( \val1 ->
         interpretCPSExpr
           expr2
-          ( \val2 ->
+          (ContNormal ( \val2 ->
               interpretCPSCmp val1 val2 cmp_func cont
-          )
-    )
+          ))
+    ))
 
-interpretCPSCmp :: LispValue -> LispValue -> (Int -> Int -> Bool) -> Cont LispValue -> InterpreterTIO
+interpretCPSCmp :: LispValue -> LispValue -> (Int -> Int -> Bool) -> ContType ( LispValue) -> InterpreterTIO
 interpretCPSCmp (LispInt x) (LispInt y) op cont =
   if x `op` y
-    then cont (LispInt 1)
-    else cont (LispInt 0)
+    then applyCont cont (LispInt 1)
+    else applyCont cont (LispInt 0)
 interpretCPSCmp result1 result2 _ _ =
   ExceptT . return . Left $
     SystemError $ T.pack "Unsupported comparision for " <> T.pack (show result1) <> " and " <> T.pack (show result2)
 
-evalRands :: [Expr] -> ([LispValue] -> InterpreterTIO) -> InterpreterTIO
+evalRands :: [Expr] -> ContType [LispValue] -> InterpreterTIO
 evalRands [] cont = applyCont cont []
-evalRands (x : xs) cont = interpretCPSExpr x (evalFirstCont xs cont)
+evalRands (x : xs) cont = interpretCPSExpr x (ContNormal (evalFirstCont xs cont))
 
-evalFirstCont :: [Expr] -> ([LispValue] -> InterpreterTIO) -> LispValue -> InterpreterTIO
-evalFirstCont xs cont val = evalRands xs (evalRestCont val cont)
+evalFirstCont :: [Expr] -> ContType [LispValue] -> LispValue -> InterpreterTIO
+evalFirstCont xs cont val = evalRands xs (ContNormal (evalRestCont val cont))
 
-evalRestCont :: LispValue -> ([LispValue] -> InterpreterTIO) -> [LispValue] -> InterpreterTIO
-evalRestCont first_val cont rest_val = cont $ (first_val : rest_val)
+evalRestCont :: LispValue -> ContType [LispValue] -> [LispValue] -> InterpreterTIO
+evalRestCont first_val cont rest_val = applyCont cont (first_val : rest_val)
 
 
-runCPSInterpreter :: String -> Cont LispValue -> IO (Either LispError LispValue)
+runCPSInterpreter :: String -> ContType (LispValue) -> IO (Either LispError LispValue)
 runCPSInterpreter input cont = do
   let result = lexAndParse input
   case result of
