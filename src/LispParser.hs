@@ -658,7 +658,7 @@ interpretCPSExpr (ExprApp exp exprs) cont = do
   where
     applyFunc exprs cont func =  do
       case func of
-        LispClosure ids expr closure -> do
+        (LispClosure ids expr closure) -> do
           evalRands exprs (applyArgs ids expr closure cont)
         e -> ExceptT . return . Left $ SystemError $ T.pack "expecting callable: Got" <> T.pack (show e)
 
