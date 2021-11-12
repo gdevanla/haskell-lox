@@ -47,7 +47,9 @@ test_exprs =
     test_parser "(== a b)" $ ExprPrimPred PrimEq (ExprVar "a") (ExprVar "b"),
     test_parser "(&& a b)" $ ExprPrimPred PrimAnd (ExprVar "a") (ExprVar "b"),
     test_parser "let a = 10 in let z = 10 in z * a" $ ExprLet (Identifier {unIdent = "a"}, ExprLitNum 10) (ExprLet (Identifier {unIdent = "z"}, ExprLitNum 10) (ExprVar "z")),
-    test_parser "letrec f = (lambda (x) x) and g = (lambda (y) y) in (+ 2 3)" $ ExprLetRec [(Identifier {unIdent = "f"}, ExprLambda [Identifier {unIdent = "x"}] (ExprVar "x")), (Identifier {unIdent = "g"}, ExprLambda [Identifier {unIdent = "y"}] (ExprVar "y"))] (ExprPrim PrimAdd [ExprLitNum 2, ExprLitNum 3])
+    test_parser "letrec f = (lambda (x) x) and g = (lambda (y) y) in (+ 2 3)" $ ExprLetRec [(Identifier {unIdent = "f"}, ExprLambda [Identifier {unIdent = "x"}] (ExprVar "x")), (Identifier {unIdent = "g"}, ExprLambda [Identifier {unIdent = "y"}] (ExprVar "y"))] (ExprPrim PrimAdd [ExprLitNum 2, ExprLitNum 3]),
+    test_parser "(try 1 catch 1)" $ ExprTryCatch (ExprLitNum 1) (ExprLitNum 2),
+    test_parser "(raise 1)" $ ExprRaise (ExprLitNum 1)
   ]
 
 lispInterpret input expected cont = testCase input $ do

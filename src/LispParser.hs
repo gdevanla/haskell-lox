@@ -38,6 +38,9 @@ data LispToken
   | In
   | LetRecAnd
   | LetRec
+  | Try
+  | Catch
+  | Raise
   deriving (Eq, Show)
 
 -- data LispTokInfo = LispTokInfo LispToken SourcePos
@@ -96,6 +99,9 @@ scanKeywords :: Parser LispToken
 scanKeywords =  try ((return LetRec) <* (string "letrec" <* whitespace)) <|>
                 try ((return Let) <* (string "let" <* whitespace)) <|>
                 try ((return In) <* (string "in" <* whitespace)) <|>
+                try ((return Try) <* (string "try" <* whitespace)) <|>
+                try ((return Catch) <* (string "catch" <* whitespace)) <|>
+                try ((return Raise) <* (string "raise" <* whitespace)) <|>
                 ((return LetRecAnd) <* (string "and" <* whitespace))
 
 scanSymbol :: Parser LispToken
@@ -140,6 +146,8 @@ data Expr
   | ExprPrimPred !PrimitivePred Expr Expr
   | ExprLet (Identifier, Expr) Expr
   | ExprLetRec [(Identifier, Expr)] Expr
+  | ExprTryCatch !Expr !Expr
+  | ExprRaise Expr
   deriving (Eq, Show)
 
 data Primitive
@@ -234,8 +242,38 @@ satisfyLetRecAnd :: LispToken -> Maybe Bool
 satisfyLetRecAnd LetRecAnd = Just True
 satisfyLetRecAnd _ = Nothing
 
+satisfyTry :: LispToken -> Maybe Bool
+satisfyTry Try = Just True
+satisfyTry _ = Nothing
+
+satisfyCatch :: LispToken -> Maybe Bool
+satisfyCatch Catch = Just True
+satisfyCatch _ = Nothing
+
+satisfyRaise :: LispToken -> Maybe Bool
+satisfyRaise Raise = Just True
+satisfyRaise _ = Nothing
+
 exprVar :: LispParser Expr
 exprVar = satisfyTok satisfySymbol
+
+exprTryCatch :: ParsecT [LispToken] () Identity Expr
+exprTryCatch = do
+  void $ satisfyTok satisfyLParen
+  void $ satisfyTok satisfyTry
+  try_expr <- exprExpr
+  void $ satisfyTok satisfyCatch
+  catch_expr <- exprExpr
+  void $ satisfyTok satisfyRParen
+  return $ ExprTryCatch try_expr catch_expr
+
+exprRaise :: ParsecT [LispToken] () Identity Expr
+exprRaise = do
+  void $ satisfyTok satisfyLParen
+  void $ satisfyTok satisfyRaise
+  raise_expr <- exprExpr
+  void $ satisfyTok satisfyRParen
+  return $ ExprRaise raise_expr
 
 exprLambda :: ParsecT [LispToken] () Identity Expr
 exprLambda = do
@@ -316,6 +354,8 @@ exprLetRec = do
 exprExpr :: ParsecT [LispToken] () Identity Expr
 exprExpr = do
   try exprLet
+    <|> try exprTryCatch
+    <|> try exprRaise
     <|> try exprLetRec
     <|> try exprLambda
     <|> try exprPrimitivePredicate
