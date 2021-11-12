@@ -579,7 +579,6 @@ interpretCmp (LispInt x) (LispInt y) op = if x `op` y then return (LispInt 1) el
 interpretCmp result1 result2 _ =
   ExceptT . return . Left $
     SystemError $ T.pack "Unsupported comparision for " <> T.pack (show result1) <> " and " <> T.pack (show result2)
-
 runInterpreter :: String -> IO (Either LispError LispValue)
 runInterpreter input = do
   let result = lexAndParse input
@@ -593,55 +592,62 @@ runInterpreter input = do
     Left e -> error $ show e
 
 
-type Cont = (LispValue -> LispValue)
+type Cont = (LispValue -> InterpreterTIO)
 
-applyCont :: Cont -> LispValue -> LispValue
+
+testCont :: Expr -> Expr -> Cont -> LispValue -> InterpreterTIO
+testCont true_exp false_exp cont val = do
+  if (isTruthy val)
+    then interpretCPSExpr true_exp cont
+    else interpretCPSExpr false_exp cont
+
+applyCont :: Cont -> LispValue -> InterpreterTIO
 applyCont cont val = cont val
 
 interpretCPSExpr :: Expr -> Cont -> InterpreterTIO
-interpretCPSExpr (ExprLitNum a) cont = return $ applyCont cont (LispInt a)
--- interpretExpr (ExprVar var) = do
+interpretCPSExpr (ExprLitNum a) cont = applyCont cont (LispInt a)
+-- interpretCPSExpr (ExprVar var) cont = do
 --   env <- get
 --   case lookupEnv var env of
---     Just v -> return v
+--     Just v -> applyCont cont v
 --     Nothing -> ExceptT . return . Left $ SystemError $ "undefined var:" <> var
 -- interpretExpr (ExprLambda ids expr) = LispClosure ids expr <$> get
--- interpretExpr (ExprApp exp exprs) = do
+-- interpretCPSExpr (ExprApp exp exprs) cont = do
 --   orig_env <- get
---   func <- interpretExpr exp
+--   func <- interpretCPSExpr exp cont
 --   -- liftIO $ putStrLn $ "calling "  ++ show func
 --   -- liftIO $ putStrLn $ show exprs
 --   case func of
 --     LispClosure ids expr closure -> do
---       args <- mapM interpretExpr exprs
+--       args <- mapM (flip interpretCPSExpr cont) exprs
 --       let !pa = L.zip (L.map unIdent ids) args
 --       let !s = multiInsertEnv pa (initEnv (Just closure))
 --       put $! s
 --       value <- interpretExpr expr
 --       put $! orig_env
---       return $! value
+--       return $! applyCont cont value
 --     e -> ExceptT . return . Left $ SystemError $ T.pack "expecting callable: Got" <> T.pack (show e)
 
--- interpretExpr (ExprIf test_exp true_exp false_exp) = do
---   test <- interpretExpr test_exp
---   if isTruthy test then interpretExpr true_exp else interpretExpr false_exp
--- interpretExpr (ExprPrim prim exprs) = do
---   rands <- mapM interpretExpr exprs
---   let rands' = traverse convert rands
---   case rands' of
---     Right (x : xs) -> return $ LispInt $ applyPrim (func prim) x xs
---     Right _ -> ExceptT . return . Left $ SystemError $ T.pack "Not enough operands for " <> T.pack (show prim)
---     Left e -> ExceptT . return . Left $ SystemError e
---   where
---     convert (LispInt a) = Right a
---     convert x = Left $ T.pack "Invalid rand for primitive type: " <> T.pack (show x)
+interpretCPSExpr (ExprIf test_exp true_exp false_exp) cont = do
+  interpretCPSExpr test_exp (testCont true_exp false_exp cont)
 
---     applyPrim :: (Int -> Int -> Int) -> Int -> [Int] -> Int
---     applyPrim func' i vs = L.foldl' func' i vs
+interpretCPSExpr (ExprPrim prim exprs) cont = do
+  rands <- mapM interpretExpr exprs
+  let rands' = traverse convert rands
+  case rands' of
+    Right (x : xs) -> applyCont cont (LispInt $ applyPrim (func prim) x xs)
+    Right _ -> ExceptT . return . Left $ SystemError $ T.pack "Not enough operands for " <> T.pack (show prim)
+    Left e -> ExceptT . return . Left $ SystemError e
+  where
+    convert (LispInt a) = Right a
+    convert x = Left $ T.pack "Invalid rand for primitive type: " <> T.pack (show x)
 
---     func PrimAdd = (+)
---     func PrimSub = (-)
---     func PrimMult = (*)
+    applyPrim :: (Int -> Int -> Int) -> Int -> [Int] -> Int
+    applyPrim func' i vs = L.foldl' func' i vs
+
+    func PrimAdd = (+)
+    func PrimSub = (-)
+    func PrimMult = (*)
 
 -- -- interpretExpr (ExprPrimPred PrimNot [expr]) = do
 -- --   result <- interpretExpr expr
@@ -662,26 +668,36 @@ interpretCPSExpr (ExprLitNum a) cont = return $ applyCont cont (LispInt a)
 --     else do
 --       result2 <- interpretExpr expr2
 --       if isTruthy result2 then return (LispInt 1) else return (LispInt 0)
--- interpretExpr (ExprPrimPred PrimLt expr1 expr2) = do
---   result1 <- interpretExpr expr1
---   result2 <- interpretExpr expr2
---   interpretCmp result1 result2 (<)
--- interpretExpr (ExprPrimPred PrimGt expr1 expr2) = do
---   result1 <- interpretExpr expr1
---   result2 <- interpretExpr expr2
---   interpretCmp result1 result2 (>)
--- interpretExpr (ExprPrimPred PrimLte expr1 expr2) = do
---   result1 <- interpretExpr expr1
---   result2 <- interpretExpr expr2
---   interpretCmp result1 result2 (<=)
--- interpretExpr (ExprPrimPred PrimGte expr1 expr2) = do
---   result1 <- interpretExpr expr1
---   result2 <- interpretExpr expr2
---   interpretCmp result1 result2 (>=)
--- interpretExpr (ExprPrimPred PrimEq expr1 expr2) = do
---   result1 <- interpretExpr expr1
---   result2 <- interpretExpr expr2
---   interpretCmp result1 result2 (==)
+
+interpretCPSExpr (ExprPrimPred PrimLt expr1 expr2) cont = do
+  result1 <- interpretCPSExpr expr1 cont
+  result2 <- interpretCPSExpr expr2 cont
+  interpretCPSCmp result1 result2 (<) cont
+interpretCPSExpr (ExprPrimPred PrimGt expr1 expr2) cont = do
+  result1 <- interpretCPSExpr expr1 cont
+  result2 <- interpretCPSExpr expr2 cont
+  interpretCPSCmp result1 result2 (>) cont
+interpretCPSExpr (ExprPrimPred PrimLte expr1 expr2) cont = do
+  result1 <- interpretCPSExpr expr1 cont
+  result2 <- interpretCPSExpr expr2 cont
+  interpretCPSCmp result1 result2 (>=) cont
+interpretCPSExpr (ExprPrimPred PrimGte expr1 expr2) cont = do
+  result1 <- interpretCPSExpr expr1 cont
+  result2 <- interpretCPSExpr expr2 cont
+  interpretCPSCmp result1 result2 (>=) cont
+interpretCPSExpr (ExprPrimPred PrimEq expr1 expr2) cont = do
+  result1 <- interpretCPSExpr expr1 cont
+  result2 <- interpretCPSExpr expr2 cont
+  interpretCPSCmp result1 result2 (==) cont
+
+
+interpretCPSCmp :: LispValue -> LispValue -> (Int -> Int -> Bool) -> Cont -> InterpreterTIO
+interpretCPSCmp (LispInt x) (LispInt y) op cont = if x `op` y
+  then cont (LispInt 1) else cont (LispInt 0)
+interpretCPSCmp result1 result2 _ _ =
+  ExceptT . return . Left $
+    SystemError $ T.pack "Unsupported comparision for " <> T.pack (show result1) <> " and " <> T.pack (show result2)
+
 -- interpretExpr (ExprLet (Identifier x, var_expr) expr) = do
 --   var_expr' <- interpretExpr var_expr
 --   s <- get
