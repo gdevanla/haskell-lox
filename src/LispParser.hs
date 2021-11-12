@@ -632,18 +632,18 @@ runInterpreter input = do
         Left e -> return $ Left e
     Left e -> error $ show e
 
-type Cont = (LispValue -> InterpreterTIO)
+type Cont a = (a -> InterpreterTIO)
 
-testCont :: Expr -> Expr -> Cont -> LispValue -> InterpreterTIO
+testCont :: Expr -> Expr -> Cont LispValue -> LispValue -> InterpreterTIO
 testCont true_exp false_exp cont val = do
   if (isTruthy val)
     then interpretCPSExpr true_exp cont
     else interpretCPSExpr false_exp cont
 
-applyCont :: Cont -> LispValue -> InterpreterTIO
+applyCont :: Cont a -> a -> InterpreterTIO
 applyCont cont val = cont val
 
-interpretCPSExpr :: Expr -> Cont -> InterpreterTIO
+interpretCPSExpr :: Expr -> Cont LispValue -> InterpreterTIO
 interpretCPSExpr (ExprLitNum a) cont = applyCont cont (LispInt a)
 interpretCPSExpr (ExprVar var) cont = do
   env <- get
@@ -690,7 +690,7 @@ interpretCPSExpr (ExprPrim prim rands) cont = do
     func PrimSub = (-)
     func PrimMult = (*)
 
-    primArgsCont :: Primitive -> Cont -> [LispValue] -> InterpreterTIO
+    primArgsCont :: Primitive -> Cont LispValue -> [LispValue] -> InterpreterTIO
     primArgsCont prim cont args = do
       let args' = traverse convert args  -- this is not CPS style yet
       case args' of
@@ -771,7 +771,7 @@ cmpCont expr1 expr2 cont cmp_func =
           )
     )
 
-interpretCPSCmp :: LispValue -> LispValue -> (Int -> Int -> Bool) -> Cont -> InterpreterTIO
+interpretCPSCmp :: LispValue -> LispValue -> (Int -> Int -> Bool) -> Cont LispValue -> InterpreterTIO
 interpretCPSCmp (LispInt x) (LispInt y) op cont =
   if x `op` y
     then cont (LispInt 1)
@@ -781,7 +781,7 @@ interpretCPSCmp result1 result2 _ _ =
     SystemError $ T.pack "Unsupported comparision for " <> T.pack (show result1) <> " and " <> T.pack (show result2)
 
 evalRands :: [Expr] -> ([LispValue] -> InterpreterTIO) -> InterpreterTIO
-evalRands [] cont = cont []
+evalRands [] cont = applyCont cont []
 evalRands (x : xs) cont = interpretCPSExpr x (evalFirstCont xs cont)
 
 evalFirstCont :: [Expr] -> ([LispValue] -> InterpreterTIO) -> LispValue -> InterpreterTIO
@@ -791,7 +791,7 @@ evalRestCont :: LispValue -> ([LispValue] -> InterpreterTIO) -> [LispValue] -> I
 evalRestCont first_val cont rest_val = cont $ (first_val : rest_val)
 
 
-runCPSInterpreter :: String -> Cont -> IO (Either LispError LispValue)
+runCPSInterpreter :: String -> Cont LispValue -> IO (Either LispError LispValue)
 runCPSInterpreter input cont = do
   let result = lexAndParse input
   case result of
