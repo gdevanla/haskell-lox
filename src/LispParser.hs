@@ -612,7 +612,8 @@ interpretExpr (ExprLetRec bindings expr) = do
   let closure_map = M.fromList (L.map (\((Identifier x), y)->(x,y)) bindings)
   put $ RecEnv $ ClosureEnv closure_map env
   interpretExpr expr
-
+interpretExpr (ExprTryCatch _ _) = error "TryCatch expression not supported in this version of interpreter"
+interpretExpr (ExprRaise _) = error "ExprRaise expression not supported in this version of interpreter"
 
 interpretCmp :: LispValue -> LispValue -> (Int -> Int -> Bool) -> InterpreterTIO
 interpretCmp (LispInt x) (LispInt y) op = if x `op` y then return (LispInt 1) else return (LispInt 0)
@@ -746,6 +747,18 @@ interpretCPSExpr (ExprLetRec bindings expr) cont = do
   put $ RecEnv $ ClosureEnv closure_map env
   interpretCPSExpr expr cont
 
+interpretCPSExpr (ExprTryCatch try_expr1 handle_expr2) cont = do
+  interpretCPSExpr handle_expr2 (handler_cont try_expr1 cont)
+  where
+    handler_cont try_exp cont handler_val =
+      case handler_val of
+        (LispClosure _ _ _) -> interpretCPSExpr try_exp (try_cont handler_val cont)
+        _ -> ExceptT . return . Left $ SystemError "non-callable provided for try-catch handler"
+
+    try_cont handler_val cont body_val = do
+      applyCont cont body_val
+
+interpretCPSExpr (ExprRaise expr1) cont = undefined
 
 cmpCont expr1 expr2 cont cmp_func =
   interpretCPSExpr

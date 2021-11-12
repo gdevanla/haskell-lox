@@ -175,6 +175,8 @@ main = do
     test_lisp_interpret Nothing,
     test_lisp_interpret (Just id),
     non_cont,
-    with_cont]
+    with_cont,
+    test_lisp_interpret_cps
+    ]
 
 --defaultMain tests
